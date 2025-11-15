@@ -1,22 +1,29 @@
-/* frontend/src/pages/ReallocationPage.css */
+/* frontend/src/pages/ReallocationPage.css - Professional Classic Theme */
 
 .reallocation-page {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 8px;
   padding: 20px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.1);
+  border: 1px solid #e1e8ed;
 }
 
 .info-banner {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #ebf5fb 100%);
   padding: 10px;
   border-radius: 6px;
   margin-bottom: 15px;
   font-size: 12px;
-  color: #333;
-  border-left: 4px solid #2196f3;
-  border: 1px solid #e0e0e0;
+  color: #34495e;
+  border-left: 4px solid #3498db;
+  border: 1px solid #d6eaf8;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15);
+}
+
+.info-banner strong {
+  color: #2874a6;
 }
 
 .realloc-summary {
@@ -27,31 +34,39 @@
 }
 
 .summary-item {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   padding: 12px;
   border-radius: 6px;
   text-align: center;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e1e8ed;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
+  transition: all 0.3s ease;
+}
+
+.summary-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.15);
 }
 
 .summary-label {
   font-size: 10px;
-  color: #666;
+  color: #5a6c7d;
   margin-bottom: 6px;
   text-transform: uppercase;
   font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .summary-value {
   font-size: 24px;
   font-weight: 700;
-  color: #667eea;
+  color: #3498db;
 }
 
 .btn-apply-realloc {
   width: 100%;
   padding: 10px;
-  background: #4caf50;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -59,15 +74,21 @@
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 15px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
 }
 
 .btn-apply-realloc:hover:not(:disabled) {
-  background: #388e3c;
+  background: linear-gradient(135deg, #229954 0%, #1e8449 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
 }
 
 .btn-apply-realloc:disabled {
-  background: #ccc;
+  background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 2px 8px rgba(189, 195, 199, 0.3);
 }
 
 .eligibility-section {
@@ -78,71 +99,150 @@
   margin-bottom: 12px;
   font-size: 15px;
   color: #2c3e50;
+  font-weight: 600;
+  border-bottom: 2px solid #e1e8ed;
+  padding-bottom: 10px;
+}
+
+.table-container {
+  overflow-x: auto;
+  border: 1px solid #d5dbdb;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
 }
 
 .eligibility-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  background: white;
 }
 
 .eligibility-table thead {
-  background: white;
-  border-bottom: 2px solid #ddd;
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+  border-bottom: 2px solid #bdc3c7;
 }
 
 .eligibility-table th {
   padding: 8px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid #bdc3c7;
   font-size: 11px;
   text-transform: uppercase;
-  color: #666;
+  color: #34495e;
+  letter-spacing: 0.3px;
 }
 
 .eligibility-table td {
   padding: 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #ecf0f1;
   font-size: 12px;
+  color: #34495e;
+}
+
+.eligibility-table tbody tr {
+  transition: background 0.2s ease;
 }
 
 .eligibility-table tr:hover {
-  background: white;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ecf0f1 100%);
+}
+
+.td-no {
+  text-align: center;
+  color: #7f8c8d;
+  font-weight: 600;
 }
 
 .td-berth {
   font-family: 'Courier New', monospace;
   font-weight: 700;
-  color: #9c27b0;
+  color: #8e44ad;
 }
 
 .td-type {
-  color: #666;
+  color: #5a6c7d;
   font-size: 11px;
+  text-transform: uppercase;
 }
 
 .td-name {
   font-weight: 600;
-  color: #333;
+  color: #2c3e50;
 }
 
 .badge-rac {
-  background: #ff9800;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
   color: white;
   padding: 3px 8px;
   border-radius: 10px;
   font-size: 10px;
   font-weight: 600;
+  box-shadow: 0 2px 4px rgba(243, 156, 18, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .td-journey {
   font-size: 11px;
-  color: #555;
+  color: #5a6c7d;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #5a6c7d;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 6px;
+  border: 1px solid #e1e8ed;
+}
+
+.empty-state p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+}
+
+.spinner-large {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #e8eef3;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-container p {
+  margin: 0;
+  color: #5a6c7d;
+  font-size: 15px;
 }
 
 @media (max-width: 768px) {
   .realloc-summary {
     grid-template-columns: 1fr;
+  }
+  
+  .eligibility-table {
+    font-size: 11px;
+  }
+  
+  .eligibility-table th,
+  .eligibility-table td {
+    padding: 6px;
   }
 }

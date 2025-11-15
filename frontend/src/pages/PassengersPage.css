@@ -1,20 +1,23 @@
-/* frontend/src/pages/PassengersPage.css */
+/* frontend/src/pages/PassengersPage.css - Professional Classic Theme */
 
 .passengers-page {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 8px;
   padding: 20px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.1);
+  border: 1px solid #e1e8ed;
 }
 
 /* Vacant Berths Section */
 .vacant-berths-section {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e1e8ed;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
 }
 
 .section-header {
@@ -22,21 +25,25 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e1e8ed;
 }
 
 .section-header h3 {
   margin: 0;
   color: #2c3e50;
   font-size: 18px;
+  font-weight: 600;
 }
 
 .badge-count {
-  background: #4CAF50;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
   color: white;
   padding: 5px 15px;
   border-radius: 20px;
   font-size: 14px;
   font-weight: 600;
+  box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
 }
 
 /* Vacant Berths Table */
@@ -44,15 +51,16 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  background: white;
 }
 
 .vacant-berths-table thead {
-  background: white;
-  color: #333;
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+  color: #34495e;
   position: sticky;
   top: 0;
   z-index: 10;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid #bdc3c7;
 }
 
 .vacant-berths-table th {
@@ -66,17 +74,21 @@
 
 .vacant-berths-table td {
   padding: 12px 10px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #ecf0f1;
+  color: #34495e;
+}
+
+.vacant-berths-table tbody tr {
+  transition: background 0.2s ease;
 }
 
 .vacant-berths-table tr:hover {
-  background: white;
-  transition: background 0.2s;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ecf0f1 100%);
 }
 
 .vacant-berths-table .td-type {
   font-weight: 500;
-  color: #555;
+  color: #5a6c7d;
   text-align: center;
 }
 
@@ -92,39 +104,40 @@
   font-size: 12px;
   font-family: 'Courier New', monospace;
   cursor: help;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .station-code.current {
-  background: #4CAF50;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
   color: white;
-  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
 }
 
 .station-code.vacant-from {
-  background: #2196F3;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
   color: white;
-  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.3);
 }
 
 .station-code.vacant-to {
-  background: #FF9800;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
   color: white;
-  box-shadow: 0 2px 6px rgba(255, 152, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(243, 156, 18, 0.3);
 }
 
 .station-code:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Vacant Berths Filter */
 .vacant-filters {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 8px;
   padding: 15px;
   margin-bottom: 20px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e1e8ed;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
 }
 
 .vacant-filter-group {
@@ -136,7 +149,7 @@
 .filter-label {
   font-size: 14px;
   font-weight: 600;
-  color: #555;
+  color: #5a6c7d;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -153,52 +166,53 @@
   flex: 0 1 auto;
   width: 280px;
   padding: 8px 12px;
-  border: 2px solid #ddd;
+  border: 2px solid #d5dbdb;
   border-radius: 6px;
   font-size: 13px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  background: white;
 }
 
 .vacant-filter-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
 }
 
 .vacant-filter-reset {
   padding: 8px 16px;
-  background: #6c757d;
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
   color: white;
   border: none;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   white-space: nowrap;
-  opacity: 0.85;
+  box-shadow: 0 2px 6px rgba(149, 165, 166, 0.3);
 }
 
 .vacant-filter-reset:hover {
-  background: #5a6268;
-  opacity: 1;
+  background: linear-gradient(135deg, #7f8c8d 0%, #5d6d7e 100%);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
+  box-shadow: 0 4px 10px rgba(149, 165, 166, 0.4);
 }
 
 .filter-result-info {
   padding: 10px 15px;
-  background: white;
-  border-left: 4px solid #2196F3;
+  background: linear-gradient(135deg, #ffffff 0%, #ebf5fb 100%);
+  border-left: 4px solid #3498db;
   margin-bottom: 10px;
   font-size: 13px;
-  color: #333;
+  color: #34495e;
   border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #d6eaf8;
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.1);
 }
 
 .filter-result-info strong {
-  color: #0d47a1;
+  color: #2874a6;
   font-weight: 700;
 }
 
@@ -206,26 +220,27 @@
 .add-passenger-button-container {
   margin-top: 30px;
   padding: 20px 25px;
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e1e8ed;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 15px;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
 }
 
 .btn-add-passenger-bottom {
   padding: 12px 30px;
-  background: #667eea;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
   color: white;
   border: none;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -234,8 +249,8 @@
 
 .btn-add-passenger-bottom:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  background: #5568d3;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+  background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
 }
 
 .btn-add-passenger-bottom:active {
@@ -244,7 +259,7 @@
 
 .add-passenger-hint {
   margin: 0;
-  color: #6c757d;
+  color: #7f8c8d;
   font-size: 13px;
   font-weight: 500;
   font-style: italic;
@@ -258,19 +273,22 @@
 }
 
 .pass-stat {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   padding: 10px;
   border-radius: 6px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid #e0e0e0;
+  transition: all 0.3s ease;
+  border: 1px solid #e1e8ed;
+  box-shadow: 0 2px 6px rgba(44, 62, 80, 0.08);
 }
 
 .pass-stat:hover {
-  background: white;
-  color: #333;
-  border-color: #667eea;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ecf0f1 100%);
+  color: #2c3e50;
+  border-color: #3498db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.2);
 }
 
 .pass-stat-label {
@@ -278,11 +296,14 @@
   margin-bottom: 4px;
   text-transform: uppercase;
   font-weight: 600;
+  color: #5a6c7d;
+  letter-spacing: 0.5px;
 }
 
 .pass-stat-value {
   font-size: 20px;
   font-weight: 700;
+  color: #3498db;
 }
 
 .filters {
@@ -290,21 +311,26 @@
   gap: 10px;
   margin-bottom: 15px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .filter-row {
   display: flex;
   gap: 8px;
-  flex: 1;
-  min-width: 220px;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 350px;
 }
 
 .filter-input,
 .filter-select {
   padding: 8px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid #d5dbdb;
   border-radius: 4px;
   font-size: 13px;
+  background: white;
+  color: #34495e;
+  transition: all 0.2s ease;
 }
 
 .filter-input {
@@ -314,7 +340,8 @@
 .filter-input:focus,
 .filter-select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
 }
 
 .filter-btn,
@@ -325,135 +352,154 @@
   font-size: 13px;
   cursor: pointer;
   font-weight: 500;
+  transition: all 0.3s ease;
 }
 
 .filter-btn {
-  background: #667eea;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
   color: white;
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.3);
 }
 
 .filter-btn:hover {
-  background: #5568d3;
+  background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
 }
 
 .filter-reset {
-  background: #6c757d;
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
   color: white;
+  box-shadow: 0 2px 6px rgba(149, 165, 166, 0.3);
 }
 
 .filter-reset:hover {
-  background: #5a6268;
+  background: linear-gradient(135deg, #7f8c8d 0%, #5d6d7e 100%);
+  box-shadow: 0 4px 10px rgba(149, 165, 166, 0.4);
 }
 
-/* Vacant Berths Toggle Section */
+/* Vacant Berths Toggle Section - Inline with Filters */
 .vacant-toggle-section {
-  margin-bottom: 15px;
-  padding: 15px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  border: 1px solid #e0e0e0;
+  flex: 0 0 auto;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  margin-bottom: 0;
 }
 
 .vacant-toggle-btn {
-  width: 100%;
-  padding: 15px 20px;
-  background: white;
-  color: #667eea;
-  border: 1px solid #e0e0e0;
+  width: auto;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #e8f8f5 100%);
+  color: #27ae60;
+  border: 2px solid #27ae60;
   border-radius: 6px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
+  transition: all 0.3s ease;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.15);
+  white-space: nowrap;
 }
 
 .vacant-toggle-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  background: white;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.25);
+  background: linear-gradient(135deg, #e8f8f5 0%, #d5f4e6 100%);
+  border-color: #229954;
 }
 
 .toggle-count {
-  background: #4CAF50;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
   color: white;
   padding: 4px 12px;
   border-radius: 15px;
   font-size: 13px;
   font-weight: 600;
+  box-shadow: 0 2px 4px rgba(39, 174, 96, 0.3);
 }
 
 .table-container {
   overflow-x: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #d5dbdb;
   border-radius: 6px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
 }
 
 .pass-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  background: white;
 }
 
 .pass-table thead {
-  background: white;
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
   position: sticky;
   top: 0;
   z-index: 10;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid #bdc3c7;
 }
 
 .pass-table th {
   padding: 8px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid #bdc3c7;
   white-space: nowrap;
   font-size: 11px;
   text-transform: uppercase;
-  color: #666;
+  color: #34495e;
+  letter-spacing: 0.3px;
 }
 
 .pass-table td {
   padding: 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #ecf0f1;
   font-size: 12px;
+  color: #34495e;
+}
+
+.pass-table tbody tr {
+  transition: background 0.2s ease;
 }
 
 .pass-table tr:hover {
-  background: white;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ecf0f1 100%);
 }
 
 .pass-table tr.no-show-row {
-  background: white;
+  background: linear-gradient(135deg, #fef5f5 0%, #fadbd8 100%);
   opacity: 0.7;
 }
 
 .td-no {
   text-align: center;
-  color: #999;
+  color: #95a5a6;
   font-weight: 500;
 }
 
 .td-pnr {
   font-family: 'Courier New', monospace;
-  color: #666;
+  color: #7f8c8d;
   font-size: 11px;
 }
 
 .td-name {
   font-weight: 600;
-  color: #333;
+  color: #2c3e50;
 }
 
 .td-age,
 .td-gender {
   text-align: center;
+  color: #5a6c7d;
 }
 
 .td-status {
@@ -467,36 +513,39 @@
   font-weight: 600;
   display: inline-block;
   white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .badge.cnf {
-  background: #4caf50;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
   color: white;
 }
 
 .badge.rac-1,
 .badge.rac-2,
 .badge.rac-3 {
-  background: #ff9800;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
   color: white;
 }
 
 .td-class {
   font-weight: 600;
-  color: #667eea;
+  color: #3498db;
   text-align: center;
 }
 
 .td-from,
 .td-to {
   font-weight: 500;
-  color: #555;
+  color: #5a6c7d;
 }
 
 .td-berth {
   font-family: 'Courier New', monospace;
   font-weight: 600;
-  color: #9c27b0;
+  color: #8e44ad;
   font-size: 11px;
 }
 
@@ -508,10 +557,24 @@
 .table-footer {
   padding: 10px;
   text-align: center;
-  background: white;
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
   font-size: 12px;
-  color: #666;
-  border-top: 1px solid #e0e0e0;
+  color: #5a6c7d;
+  border-top: 1px solid #bdc3c7;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #5a6c7d;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 6px;
+  border: 1px solid #e1e8ed;
+}
+
+.empty-state p {
+  font-size: 14px;
+  margin: 0;
 }
 
 @media (max-width: 768px) {
@@ -534,5 +597,13 @@
   .pass-table th,
   .pass-table td {
     padding: 6px;
+  }
+  
+  .vacant-filter-inputs {
+    flex-direction: column;
+  }
+  
+  .vacant-filter-input {
+    width: 100%;
   }
 }
