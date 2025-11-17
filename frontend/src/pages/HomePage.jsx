@@ -96,6 +96,7 @@ function HomePage({
       <div className="main-stats-section">
         {/* LEFT SIDE: Statistics Container (6 cards in 2x3 grid) */}
         <div className="stats-container-left">
+          <div className="stats-header">📈 Train Statistics</div>
           <div className="stat-box">
             <div className="stat-label">Total Passengers</div>
             <div className="stat-value">{trainData.stats.totalPassengers}</div>

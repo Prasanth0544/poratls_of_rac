@@ -13,9 +13,6 @@ class BerthAllocator {
     return [7, 15, 23, 31, 39, 47, 55, 63, 71];
   }
 
-  /**
-   * Check if berth is side lower (RAC berth)
-   */
   static isSideLowerBerth(seatNo, coachClass = 'SL') {
     return this.getSideLowerBerths(coachClass).includes(parseInt(seatNo));
   }

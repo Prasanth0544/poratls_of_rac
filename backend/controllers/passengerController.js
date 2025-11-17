@@ -418,10 +418,10 @@ class PassengerController {
       const allPassengers = trainState.getAllPassengers();
 
       const counts = {
-        total: allPassengers.length,
-        cnf: allPassengers.filter((p) => p.pnrStatus === "CNF").length,
-        rac: allPassengers.filter((p) => p.pnrStatus.startsWith("RAC")).length,
-        racCnf: trainState.stats.racCnfPassengers || 0,
+        total: trainState.stats.totalPassengers,
+        cnf: trainState.stats.cnfPassengers,
+        rac: trainState.stats.racPassengers,
+        racCnf: trainState.stats.totalRACUpgraded || 0,
         boarded: allPassengers.filter((p) => p.boarded).length,
         noShow: allPassengers.filter((p) => p.noShow).length,
         upcoming: allPassengers.filter(

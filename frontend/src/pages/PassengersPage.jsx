@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   getAllPassengers, 
   getPassengerCounts, 
-  searchPassenger 
+  searchPassenger,
+  getRACQueue,
 } from '../services/api';
 import './PassengersPage.css';
 
@@ -117,13 +118,36 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     try {
       setLoading(true);
       
-      const [passengersRes, countsRes] = await Promise.all([
+      const [passengersRes, countsRes, racRes] = await Promise.all([
         getAllPassengers(),
-        getPassengerCounts()
+        getPassengerCounts(),
+        getRACQueue()
       ]);
 
       if (passengersRes.success) {
-        setPassengers(passengersRes.data.passengers);
+        const berthPassengers = passengersRes.data.passengers || [];
+        let racPassengers = [];
+        if (racRes?.success) {
+          racPassengers = (racRes.data.queue || []).map(r => ({
+            pnr: r.pnr,
+            name: r.name,
+            age: r.age,
+            gender: r.gender,
+            from: r.from,
+            to: r.to,
+            fromIdx: r.fromIdx,
+            toIdx: r.toIdx,
+            pnrStatus: r.pnrStatus,
+            racStatus: r.racStatus,
+            class: r.class,
+            coach: r.coach,
+            berth: r.seatNo ? `${r.coach}-${r.seatNo}` : 'RAC',
+            berthType: r.berthType,
+            boarded: false,
+            noShow: false,
+          }));
+        }
+        setPassengers([...berthPassengers, ...racPassengers]);
       }
 
       if (countsRes.success) {
@@ -153,7 +177,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
         break;
       case 'rac-cnf':
         filtered = filtered.filter(p => 
-          p.pnrStatus === 'CNF' && String(p.pnr).toLowerCase().includes('rac')
+          p.pnrStatus === 'CNF' && (p.racStatus?.startsWith('RAC'))
         );
         break;
       case 'rac':
@@ -222,7 +246,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
         </button>
-        <h2>👥 Passenger List ({passengers.length} total)</h2>
+        <h2>👥 Passenger List ({counts ? counts.total : passengers.length} total)</h2>
       </div>
 
       {/* Statistics - Compact */}

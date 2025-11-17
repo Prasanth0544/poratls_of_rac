@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import api from '../services/api';
+import { getAllPassengers, getPassengerCounts } from '../services/api';
 import './PassengerList.css'; // ✅ Import the CSS
 
 function PassengerList({ currentStationIdx, stations }) {
@@ -16,32 +16,16 @@ function PassengerList({ currentStationIdx, stations }) {
   useEffect(() => {
     const fetchPassengers = async () => {
       try {
-        const { data } = await api.get(`/stats/${currentStationIdx + 1}`);
-        const onboardPassengers = data.onboardList || [];
-
-        setPassengers(
-          onboardPassengers.map((p) => {
-            const fromIdx = stations.findIndex((s) => s.Stn_Name === p.from);
-            const toIdx = stations.findIndex((s) => s.Stn_Name === p.to);
-            return {
-              ...p,
-              fromIdx,
-              toIdx,
-              boarded: p.boarded || fromIdx <= currentStationIdx,
-              noShow: p.noShow || false,
-              coach: p.coach || 'N/A',
-              berth: p.coach_berth || 'N/A',
-              berthType: p.berthType || 'N/A',
-            };
-          })
-        );
+        const passengersRes = await getAllPassengers();
+        const countsRes = await getPassengerCounts();
+        const list = passengersRes?.data?.passengers || [];
+        setPassengers(list);
       } catch (err) {
-        console.error('Error fetching passengers:', err.message);
         setPassengers([]);
       }
     };
 
-    if (stations?.length > 0) fetchPassengers();
+    fetchPassengers();
   }, [currentStationIdx, stations]);
 
   // Filter + sort passengers
@@ -64,9 +48,9 @@ function PassengerList({ currentStationIdx, stations }) {
           case 'upcoming':
             return !p.boarded && !p.noShow && p.fromIdx > currentStationIdx;
           case 'cnf':
-            return p.pnr_status === 'CNF';
+            return p.pnrStatus === 'CNF';
           case 'rac':
-            return p.pnr_status?.startsWith('RAC');
+            return p.pnrStatus?.startsWith('RAC');
           default:
             return true;
         }
@@ -102,8 +86,8 @@ function PassengerList({ currentStationIdx, stations }) {
     noShow: passengers.filter((p) => p.noShow).length,
     notBoarded: passengers.filter((p) => !p.boarded && !p.noShow && p.fromIdx <= currentStationIdx).length,
     upcoming: passengers.filter((p) => !p.boarded && p.fromIdx > currentStationIdx).length,
-    cnf: passengers.filter((p) => p.pnr_status === 'CNF').length,
-    rac: passengers.filter((p) => p.pnr_status?.startsWith('RAC')).length,
+    cnf: passengers.filter((p) => p.pnrStatus === 'CNF').length,
+    rac: passengers.filter((p) => p.pnrStatus?.startsWith('RAC')).length,
   }), [passengers, currentStationIdx]);
 
   const getPassengerStatus = (p) => {
@@ -201,7 +185,7 @@ function PassengerList({ currentStationIdx, stations }) {
             <table className="passengers-table">
               <thead>
                 <tr>
-                  {['pnr', 'name', 'age', 'gender', 'from', 'to', 'class', 'pnr_status', 'berth', 'berthType', 'status'].map((col) => (
+                  {['pnr', 'name', 'age', 'gender', 'from', 'to', 'class', 'pnrStatus', 'berth', 'berthType', 'status'].map((col) => (
                     <th key={col} onClick={() => handleSort(col)} className="sortable">
                       {col.toUpperCase()} {sortBy === col && (sortOrder === 'asc' ? '▲' : '▼')}
                     </th>
@@ -221,8 +205,8 @@ function PassengerList({ currentStationIdx, stations }) {
                       <td className="station-cell">{p.to || 'N/A'}</td>
                       <td><span className="class-badge">{p.class || 'N/A'}</span></td>
                       <td>
-                        <span className={`pnr-status-badge ${p.pnr_status === 'CNF' ? 'cnf' : 'rac'}`}>
-                          {p.pnr_status || 'N/A'}
+                        <span className={`pnr-status-badge ${p.pnrStatus === 'CNF' ? 'cnf' : 'rac'}`}>
+                          {p.pnrStatus || 'N/A'}
                         </span>
                       </td>
                       <td className="berth-cell">{p.berth}</td>

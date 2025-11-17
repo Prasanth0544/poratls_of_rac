@@ -49,8 +49,12 @@ function RACQueuePage({ trainData, onClose }) {
   return (
     <div className="rac-queue-page">
       <div className="page-header">
+        <button className="back-btn" onClick={onClose}>
+          <svg viewBox="0 0 24 24" fill="<-" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
         <h2>🎫 RAC Queue ({racQueue.length} passengers)</h2>
-        <button className="btn-close" onClick={onClose}>✕ Close</button>
       </div>
 
       {racQueue.length === 0 ? (

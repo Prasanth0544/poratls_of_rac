@@ -144,46 +144,44 @@ class ReallocationService {
    * Get eligibility matrix
    */
   getEligibilityMatrix(trainState) {
-    const vacantBerths = trainState.getVacantBerths();
     const eligibilityMatrix = [];
 
-    vacantBerths.forEach((vacancy) => {
-      const berth = trainState.findBerth(vacancy.coachNo, vacancy.berthNo);
+    // Scan all berths; eligibility is segment-based, not only globally vacant
+    for (const coach of trainState.coaches) {
+      for (const berth of coach.berths) {
+        const eligibleRAC = [];
 
-      if (!berth) return;
+        for (const rac of trainState.racQueue) {
+          if (berth.isAvailableForSegment(rac.fromIdx, rac.toIdx)) {
+            eligibleRAC.push({
+              pnr: rac.pnr,
+              name: rac.name,
+              age: rac.age,
+              gender: rac.gender,
+              racNumber: rac.racNumber,
+              pnrStatus: rac.pnrStatus,
+              racStatus: rac.racStatus,
+              from: rac.from,
+              to: rac.to,
+              class: rac.class,
+              berthType: rac.berthType,
+            });
+          }
+        }
 
-      const eligibleRAC = [];
-
-      trainState.racQueue.forEach((rac) => {
-        if (berth.isAvailableForSegment(rac.fromIdx, rac.toIdx)) {
-          eligibleRAC.push({
-            pnr: rac.pnr,
-            name: rac.name,
-            age: rac.age,
-            gender: rac.gender,
-            racNumber: rac.racNumber,
-            pnrStatus: rac.pnrStatus,
-            racStatus: rac.racStatus,
-            from: rac.from,
-            to: rac.to,
-            class: rac.class,
-            berthType: rac.berthType,
+        if (eligibleRAC.length > 0) {
+          eligibilityMatrix.push({
+            berth: berth.fullBerthNo,
+            coach: coach.coachNo,
+            berthNo: berth.berthNo,
+            type: berth.type,
+            class: coach.class,
+            eligibleRAC,
+            topEligible: eligibleRAC[0],
           });
         }
-      });
-
-      if (eligibleRAC.length > 0) {
-        eligibilityMatrix.push({
-          berth: vacantBerth.fullBerthNo,
-          coach: vacantBerth.coachNo,
-          berthNo: vacantBerth.berthNo,
-          type: vacantBerth.type,
-          class: vacantBerth.class,
-          eligibleRAC: eligibleRAC,
-          topEligible: eligibleRAC[0],
-        });
       }
-    });
+    }
 
     return eligibilityMatrix;
   }

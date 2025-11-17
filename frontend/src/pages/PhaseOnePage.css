@@ -1,0 +1,30 @@
+.phase-one-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 15px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.empty-content {
+  padding: 20px;
+  border: 1px solid #e1e8ed;
+  border-radius: 6px;
+  background: #f8f9fa;
+  color: #5a6c7d;
+  text-align: center;
+}

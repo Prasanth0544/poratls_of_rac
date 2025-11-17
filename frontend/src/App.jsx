@@ -10,6 +10,7 @@ import PassengersPage from './pages/PassengersPage';
 import ReallocationPage from './pages/ReallocationPage';
 import VisualizationPage from './pages/VisualizationPage';
 import AddPassengerPage from './pages/AddPassengerPage'; // NEW: Import AddPassengerPage
+import PhaseOnePage from './pages/PhaseOnePage';
 import ConfigPage from './pages/ConfigPage';
 import './App.css';
 
@@ -379,6 +380,12 @@ function App() {
         {currentPage === 'add-passenger' && (
           <AddPassengerPage
             trainData={trainData}
+            onClose={handleClosePage}
+          />
+        )}
+
+        {currentPage === 'phase1' && (
+          <PhaseOnePage
             onClose={handleClosePage}
           />
         )}

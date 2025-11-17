@@ -117,6 +117,16 @@ const AddPassengerPage = ({ trainData, onClose }) => {
     <div className="add-passenger-page">
       <div className="page-container">
         <div className="page-header">
+          <button onClick={onClose} className="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
           <div className="header-content">
             <div className="header-icon">
               <svg
@@ -136,16 +146,7 @@ const AddPassengerPage = ({ trainData, onClose }) => {
               <p>Fill in the passenger details for booking</p>
             </div>
           </div>
-          <button onClick={onClose} className="back-btn">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-          </button>
+          
         </div>
 
         <form onSubmit={handleSubmit} className="passenger-form">

@@ -393,7 +393,7 @@
   padding: 8px 16px;
   background: linear-gradient(135deg, #ffffff 0%, #e8f8f5 100%);
   color: #27ae60;
-  border: 2px solid #27ae60;
+  border: 2px solid #d5dbdb;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
@@ -411,7 +411,7 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(39, 174, 96, 0.25);
   background: linear-gradient(135deg, #e8f8f5 0%, #d5f4e6 100%);
-  border-color: #229954;
+  border-color: #27ae60;
 }
 
 .toggle-count {
@@ -430,6 +430,7 @@
   border-radius: 6px;
   background: white;
   box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
+  margin-top: 15px;
 }
 
 .pass-table {
