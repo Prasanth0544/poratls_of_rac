@@ -16,7 +16,7 @@ function PhaseOnePage({ onClose }) {
           >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          ◄
+          ◄ Back
         </button>
         <h2>🎯 Phase 1</h2>
       </div>

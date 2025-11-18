@@ -16,6 +16,7 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
+  const [applyErrors, setApplyErrors] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -49,35 +50,49 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
     }
   };
 
+  const getUniqueAllocations = () => {
+    const seen = new Set();
+    const list = [];
+    eligibility.forEach((e) => {
+      const top = e.topEligible;
+      if (!top) return;
+      const allocation = { coach: e.coach, berth: e.berthNo, pnr: top.pnr };
+      if (!allocation.coach || !allocation.berth || !allocation.pnr) return;
+      if (seen.has(allocation.pnr)) return; // prevent duplicate PNR allocations
+      list.push(allocation);
+      seen.add(allocation.pnr);
+    });
+    return list;
+  };
+
   const handleApplyReallocation = async () => {
     if (eligibility.length === 0) {
       alert("No eligible RAC passengers for reallocation");
       return;
     }
 
-    if (
-      !window.confirm(
-        `Apply reallocation for ${eligibility.length} vacant berths?`,
-      )
-    ) {
+    const allocations = getUniqueAllocations();
+    if (allocations.length === 0) {
+      alert("No valid allocations to apply");
+      return;
+    }
+
+    if (!window.confirm(`Apply reallocation for ${allocations.length} allocations?`)) {
       return;
     }
 
     try {
       setApplying(true);
 
-      const allocations = eligibility.map((e) => ({
-        coach: e.coach,
-        berth: e.berthNo,
-        pnr: e.topEligible.pnr,
-      }));
-
+      setApplyErrors([]);
       const response = await applyReallocation(allocations);
 
       if (response.success) {
-        alert(
-          `✅ Reallocation Applied!\n\nSuccess: ${response.data.success.length}\nFailed: ${response.data.failed.length}`,
-        );
+        const failed = response.data.failed || [];
+        if (failed.length > 0) {
+          setApplyErrors(failed.map(f => `${f.berth} / ${f.pnr}: ${f.reason}`));
+        }
+        alert(`✅ Reallocation Applied!\n\nSuccess: ${response.data.success.length}\nFailed: ${failed.length}`);
 
         await loadTrainState();
         await loadData();
@@ -163,8 +178,19 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
         >
           {applying
             ? "Applying..."
-            : `Apply Reallocation (${eligibility.length})`}
+            : `Apply Reallocation (${getUniqueAllocations().length})`}
         </button>
+      )}
+
+      {applyErrors.length > 0 && (
+        <div className="error-banner compact">
+          <strong>Some allocations failed:</strong>
+          <ul>
+            {applyErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Eligibility Table - Enhanced with All Eligible RAC */}
@@ -183,8 +209,6 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
                   <th>No.</th>
                   <th>Berth</th>
                   <th>Type</th>
-                  <th>Vacant Segment</th>
-                  <th>Eligible RAC</th>
                   <th>Top Priority</th>
                   <th>RAC Status</th>
                   <th>Journey</th>
@@ -207,16 +231,6 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
                       <td className="td-no">{idx + 1}</td>
                       <td className="td-berth">{item.berth}</td>
                       <td className="td-type">{item.type}</td>
-                      <td className="td-segment">
-                        <span className="segment-badge">
-                          {item.vacantSegment}
-                        </span>
-                      </td>
-                      <td className="td-eligible-count">
-                        <span className="count-badge">
-                          {item.eligibleCount} eligible
-                        </span>
-                      </td>
                       <td className="td-name">
                         <strong>{item.topEligible.name}</strong>
                       </td>
@@ -247,11 +261,10 @@ function ReallocationPage({ trainData, onClose, loadTrainState }) {
                     {/* Expanded Row - Show All Eligible RAC */}
                     {expandedRows[idx] && (
                       <tr className="expanded-details">
-                        <td colSpan="9">
+                        <td colSpan="7">
                           <div className="eligible-rac-list">
                             <h4>
-                              All Eligible RAC Passengers ({item.eligibleCount}
-                              ):
+                              All Eligible RAC Passengers ({(item.eligibleRAC || []).length}):
                             </h4>
                             <table className="rac-details-table">
                               <thead>
