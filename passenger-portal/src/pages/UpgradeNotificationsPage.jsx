@@ -1,312 +1,508 @@
 // passenger-portal/src/pages/UpgradeNotificationsPage.jsx
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from "react";
 import {
-    Box,
-    Card,
-    CardContent,
-    TextField,
-    Button,
-    Typography,
-    Grid,
-    Chip,
-    Alert,
-    CircularProgress,
-    Paper,
-    List,
-    ListItem,
-    ListItemText,
-    Divider,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions
-} from '@mui/material';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import InfoIcon from '@mui/icons-material/Info';
-import { passengerAPI } from '../api';
+  Box,
+  Container,
+  Typography,
+  Paper,
+  Alert,
+  CircularProgress,
+  Button,
+  Tabs,
+  Tab,
+  Grid,
+  Chip,
+  Stack,
+  Divider,
+  IconButton,
+  Tooltip,
+  Badge,
+} from "@mui/material";
+import {
+  Notifications,
+  History,
+  Refresh,
+  CheckCircle,
+  Cancel,
+  HourglassEmpty,
+  Info,
+  Warning,
+} from "@mui/icons-material";
+import OfferCard from "../components/OfferCard";
+import useSocket from "../hooks/useSocket";
+import useOffers from "../hooks/useOffers";
+import { passengerAPI } from "../api";
+import { checkUpgradeEligibility } from "../utils/eligibility";
+import { OFFER_STATUS, STORAGE_KEYS } from "../constants";
+import { storage } from "../utils/helpers";
 
 const UpgradeNotificationsPage = () => {
-    const [pnr, setPnr] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [notifications, setNotifications] = useState([]);
-    const [error, setError] = useState('');
-    const [selectedNotification, setSelectedNotification] = useState(null);
-    const [actionDialogOpen, setActionDialogOpen] = useState(false);
-    const [actionType, setActionType] = useState(''); // 'accept' or 'deny'
-    const [denyReason, setDenyReason] = useState('');
+  const [pnr, setPnr] = useState("");
+  const [passenger, setPassenger] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [currentTab, setCurrentTab] = useState(0);
+  const [eligibility, setEligibility] = useState(null);
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        if (!pnr || pnr.length < 5) {
-            setError('Please enter a valid PNR number');
-            return;
-        }
+  // Get PNR from localStorage or session
+  useEffect(() => {
+    const storedPnr = storage.get(STORAGE_KEYS.LAST_PNR);
+    if (storedPnr) {
+      setPnr(storedPnr);
+      fetchPassengerDetails(storedPnr);
+    }
+  }, []);
 
-        setLoading(true);
-        setError('');
-        setNotifications([]);
+  // Initialize WebSocket connection
+  const socket = useSocket(pnr, {
+    autoConnect: !!pnr,
+    onConnect: () => {
+      console.log("WebSocket connected for offers");
+    },
+    onDisconnect: () => {
+      console.log("WebSocket disconnected");
+    },
+    onError: (error) => {
+      console.error("WebSocket error:", error);
+    },
+  });
 
-        try {
-            const response = await passengerAPI.getUpgradeNotifications(pnr.toUpperCase());
-            setNotifications(response.data || []);
-            if (response.data && response.data.length === 0) {
-                setError('No upgrade notifications found for this PNR');
-            }
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to fetch notifications');
-        } finally {
-            setLoading(false);
-        }
-    };
+  // Initialize offers hook
+  const {
+    offers,
+    activeOffers,
+    loading: offersLoading,
+    error: offersError,
+    processingOffer,
+    hasActiveOffers,
+    acceptOffer,
+    denyOffer,
+    refreshOffers,
+    getStatistics,
+  } = useOffers(pnr, socket);
 
-    const openActionDialog = (notification, type) => {
-        setSelectedNotification(notification);
-        setActionType(type);
-        setActionDialogOpen(true);
-        setDenyReason('');
-    };
+  // Fetch passenger details
+  const fetchPassengerDetails = async (pnrNumber) => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const handleAction = async () => {
-        try {
-            setLoading(true);
+      const response = await passengerAPI.getPNRDetails(pnrNumber);
 
-            if (actionType === 'accept') {
-                await passengerAPI.acceptUpgrade(pnr, selectedNotification.id);
-                alert('✅ Upgrade accepted successfully! You will be moved to the new berth.');
-            } else {
-                await passengerAPI.denyUpgrade(pnr, selectedNotification.id, denyReason || 'Passenger declined');
-                alert('Upgrade declined. You will remain at your current berth.');
-            }
+      if (response.success) {
+        const passengerData = response.data;
+        setPassenger(passengerData);
 
-            setActionDialogOpen(false);
-            // Refresh notifications
-            const response = await passengerAPI.getUpgradeNotifications(pnr);
-            setNotifications(response.data || []);
-        } catch (err) {
-            alert(err.response?.data?.message || `Failed to ${actionType} upgrade`);
-        } finally {
-            setLoading(false);
-        }
-    };
+        // Check eligibility
+        const eligibilityCheck = checkUpgradeEligibility(passengerData);
+        setEligibility(eligibilityCheck);
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'PENDING':
-                return 'warning';
-            case 'ACCEPTED':
-                return 'success';
-            case 'DENIED':
-                return 'error';
-            default:
-                return 'default';
-        }
-    };
+        // Store PNR for future use
+        storage.set(STORAGE_KEYS.LAST_PNR, pnrNumber);
+      }
+    } catch (err) {
+      console.error("Failed to fetch passenger details:", err);
+      setError(
+        err.response?.data?.message || "Failed to load passenger details",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <Box sx={{ py: 4 }}>
-            <Paper elevation={0} sx={{ p: 4, mb: 4, bgcolor: 'secondary.main', color: 'white', borderRadius: 2 }}>
-                <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <NotificationsActiveIcon fontSize="large" />
-                    Upgrade Notifications
-                </Typography>
-                <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                    Check if you have any pending upgrade offers from RAC to Confirmed berth.
-                </Typography>
-            </Paper>
+  // Handle offer acceptance
+  const handleAcceptOffer = async (offerId, notificationId) => {
+    const result = await acceptOffer(offerId, notificationId);
 
-            <Card elevation={3} sx={{ mb: 4 }}>
-                <CardContent sx={{ p: 4 }}>
-                    <form onSubmit={handleSearch}>
-                        <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} md={8}>
-                                <TextField
-                                    fullWidth
-                                    label="Enter PNR Number"
-                                    placeholder="e.g., 1234567890"
-                                    value={pnr}
-                                    onChange={(e) => setPnr(e.target.value.toUpperCase())}
-                                    variant="outlined"
-                                    inputProps={{ maxLength: 10, style: { textTransform: 'uppercase', fontSize: '18px', letterSpacing: '1px' } }}
-                                    disabled={loading}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={4}>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    size="large"
-                                    type="submit"
-                                    disabled={loading}
-                                    startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <NotificationsActiveIcon />}
-                                    sx={{ height: '56px' }}
-                                >
-                                    {loading ? 'Loading...' : 'Check Notifications'}
-                                </Button>
-                            </Grid>
-                        </Grid>
-                    </form>
+    if (result.success) {
+      // Refresh passenger details to get updated status
+      await fetchPassengerDetails(pnr);
+    }
+  };
 
-                    {error && (
-                        <Alert severity="info" sx={{ mt: 3 }} icon={<InfoIcon />}>
-                            {error}
-                        </Alert>
-                    )}
-                </CardContent>
-            </Card>
+  // Handle offer denial
+  const handleDenyOffer = async (offerId, notificationId) => {
+    const result = await denyOffer(offerId, notificationId, "Not interested");
 
-            {notifications.length > 0 && (
-                <Box>
-                    <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-                        Found {notifications.length} Notification{notifications.length > 1 ? 's' : ''}
-                    </Typography>
+    if (result.success) {
+      // Optionally refresh
+    }
+  };
 
-                    <List sx={{ bgcolor: 'background.paper' }}>
-                        {notifications.map((notification, index) => (
-                            <React.Fragment key={notification.id}>
-                                {index > 0 && <Divider />}
-                                <ListItem
-                                    sx={{
-                                        flexDirection: 'column',
-                                        alignItems: 'stretch',
-                                        py: 3,
-                                        '&:hover': { bgcolor: 'action.hover' },
-                                    }}
-                                >
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                                        <Box>
-                                            <Typography variant="h6" gutterBottom>
-                                                Upgrade Offer #{index + 1}
-                                            </Typography>
-                                            <Chip
-                                                label={notification.status}
-                                                color={getStatusColor(notification.status)}
-                                                size="small"
-                                                sx={{ fontWeight: 'bold' }}
-                                            />
-                                        </Box>
-                                        <Typography variant="caption" color="text.secondary">
-                                            {new Date(notification.timestamp).toLocaleString()}
-                                        </Typography>
-                                    </Box>
+  // Handle tab change
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+  };
 
-                                    <Grid container spacing={2} sx={{ mb: 2 }}>
-                                        <Grid item xs={12} sm={6}>
-                                            <Typography variant="body2" color="text.secondary">Current Berth</Typography>
-                                            <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                                                {notification.currentBerth} ({notification.currentBerthType})
-                                            </Typography>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <Typography variant="body2" color="text.secondary">Offered Berth</Typography>
-                                            <Typography variant="body1" sx={{ fontWeight: 600, color: 'success.main' }}>
-                                                {notification.offeredCoach}-{notification.offeredSeatNo} ({notification.offeredBerthType})
-                                            </Typography>
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <Typography variant="body2" color="text.secondary">Current Station</Typography>
-                                            <Typography variant="body1">{notification.currentStation}</Typography>
-                                        </Grid>
-                                    </Grid>
+  // Handle manual refresh
+  const handleRefresh = async () => {
+    await refreshOffers();
+    if (pnr) {
+      await fetchPassengerDetails(pnr);
+    }
+  };
 
-                                    {notification.status === 'PENDING' && (
-                                        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                                            <Button
-                                                variant="contained"
-                                                color="success"
-                                                startIcon={<CheckCircleIcon />}
-                                                onClick={() => openActionDialog(notification, 'accept')}
-                                                fullWidth
-                                            >
-                                                Accept Upgrade
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                color="error"
-                                                startIcon={<CancelIcon />}
-                                                onClick={() => openActionDialog(notification, 'deny')}
-                                                fullWidth
-                                            >
-                                                Decline
-                                            </Button>
-                                        </Box>
-                                    )}
+  // Filter offers by status
+  const pendingOffers = offers.filter((o) => o.status === OFFER_STATUS.PENDING);
+  const acceptedOffers = offers.filter(
+    (o) => o.status === OFFER_STATUS.ACCEPTED,
+  );
+  const confirmedOffers = offers.filter(
+    (o) => o.status === OFFER_STATUS.CONFIRMED,
+  );
+  const expiredOffers = offers.filter(
+    (o) =>
+      o.status === OFFER_STATUS.EXPIRED ||
+      o.status === OFFER_STATUS.DENIED ||
+      o.status === OFFER_STATUS.REJECTED,
+  );
 
-                                    {notification.status === 'ACCEPTED' && (
-                                        <Alert severity="success" sx={{ mt: 2 }}>
-                                            ✓ You have accepted this upgrade. Please move to your new berth.
-                                        </Alert>
-                                    )}
+  const stats = getStatistics();
 
-                                    {notification.status === 'DENIED' && (
-                                        <Alert severity="info" sx={{ mt: 2 }}>
-                                            You declined this upgrade offer.
-                                        </Alert>
-                                    )}
-                                </ListItem>
-                            </React.Fragment>
-                        ))}
-                    </List>
-                </Box>
-            )}
-
-            {/* Action Confirmation Dialog */}
-            <Dialog open={actionDialogOpen} onClose={() => !loading && setActionDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>
-                    {actionType === 'accept' ? 'Accept Upgrade Offer?' : 'Decline Upgrade Offer?'}
-                </DialogTitle>
-                <DialogContent>
-                    {selectedNotification && (
-                        <Box>
-                            <Typography paragraph>
-                                {actionType === 'accept' ? (
-                                    <>
-                                        You are about to accept an upgrade from <strong>{selectedNotification.currentBerth}</strong> to{' '}
-                                        <strong style={{ color: '#4caf50' }}>
-                                            {selectedNotification.offeredCoach}-{selectedNotification.offeredSeatNo}
-                                        </strong>.
-                                    </>
-                                ) : (
-                                    <>
-                                        You are about to decline this upgrade offer. You will remain at your current berth{' '}
-                                        <strong>{selectedNotification.currentBerth}</strong>.
-                                    </>
-                                )}
-                            </Typography>
-
-                            {actionType === 'deny' && (
-                                <TextField
-                                    fullWidth
-                                    label="Reason (Optional)"
-                                    placeholder="e.g., Prefer current berth"
-                                    value={denyReason}
-                                    onChange={(e) => setDenyReason(e.target.value)}
-                                    variant="outlined"
-                                    multiline
-                                    rows={2}
-                                    sx={{ mt: 2 }}
-                                />
-                            )}
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setActionDialogOpen(false)} disabled={loading}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleAction}
-                        variant="contained"
-                        color={actionType === 'accept' ? 'success' : 'error'}
-                        disabled={loading}
-                    >
-                        {loading ? 'Processing...' : actionType === 'accept' ? 'Yes, Accept' : 'Yes, Decline'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+  return (
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Header */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 4,
+          mb: 4,
+          bgcolor: "primary.main",
+          color: "white",
+          borderRadius: 2,
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box>
+            <Typography
+              variant="h4"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
+              <Badge
+                badgeContent={hasActiveOffers ? activeOffers.length : 0}
+                color="error"
+              >
+                <Notifications fontSize="large" />
+              </Badge>
+              Upgrade Notifications
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+              View and respond to upgrade offers in real-time
+            </Typography>
+          </Box>
+          <Tooltip title="Refresh offers">
+            <IconButton
+              onClick={handleRefresh}
+              disabled={!pnr || loading || offersLoading}
+              sx={{ color: "white" }}
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
         </Box>
-    );
+      </Paper>
+
+      {/* PNR Input (if not set) */}
+      {!pnr && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Please check your PNR on the home page first to view upgrade
+          notifications.
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Offers Error */}
+      {offersError && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {offersError}
+        </Alert>
+      )}
+
+      {/* Passenger Info and Eligibility */}
+      {passenger && (
+        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" gutterBottom>
+                Passenger: {passenger.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                PNR: {passenger.pnr} | Status: {passenger.pnrStatus}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <Chip
+                  label={passenger.boarded ? "Boarded" : "Not Boarded"}
+                  color={passenger.boarded ? "success" : "warning"}
+                  size="small"
+                />
+                <Chip
+                  label={eligibility?.eligible ? "Eligible" : "Not Eligible"}
+                  color={eligibility?.eligible ? "success" : "error"}
+                  size="small"
+                  icon={eligibility?.eligible ? <CheckCircle /> : <Cancel />}
+                />
+              </Box>
+            </Grid>
+          </Grid>
+
+          {/* Eligibility Warning */}
+          {eligibility && !eligibility.eligible && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <strong>Not Eligible:</strong> {eligibility.reason}
+            </Alert>
+          )}
+
+          {/* Connection Status */}
+          <Box sx={{ mt: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                bgcolor: socket.isConnected ? "success.main" : "error.main",
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {socket.isConnected
+                ? "Real-time updates enabled"
+                : "Offline - Limited functionality"}
+            </Typography>
+          </Box>
+        </Paper>
+      )}
+
+      {/* Statistics */}
+      {pnr && (
+        <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+          <Stack
+            direction="row"
+            spacing={2}
+            divider={<Divider orientation="vertical" flexItem />}
+          >
+            <Box sx={{ flex: 1, textAlign: "center" }}>
+              <Typography variant="h4" color="primary.main">
+                {stats.pending}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Active Offers
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: "center" }}>
+              <Typography variant="h4" color="info.main">
+                {stats.accepted}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Awaiting TTE
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: "center" }}>
+              <Typography variant="h4" color="success.main">
+                {stats.confirmed}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Confirmed
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: "center" }}>
+              <Typography variant="h4" color="text.secondary">
+                {stats.total}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Total Offers
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Tabs */}
+      {pnr && (
+        <Paper elevation={2} sx={{ mb: 3 }}>
+          <Tabs
+            value={currentTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+          >
+            <Tab
+              icon={
+                <Badge badgeContent={activeOffers.length} color="error">
+                  <Notifications />
+                </Badge>
+              }
+              label="Active Offers"
+            />
+            <Tab
+              icon={<HourglassEmpty />}
+              label={`Pending Confirmation (${acceptedOffers.length})`}
+            />
+            <Tab
+              icon={<CheckCircle />}
+              label={`Confirmed (${confirmedOffers.length})`}
+            />
+            <Tab
+              icon={<History />}
+              label={`History (${expiredOffers.length})`}
+            />
+          </Tabs>
+        </Paper>
+      )}
+
+      {/* Content */}
+      {pnr && (
+        <>
+          {/* Active Offers Tab */}
+          {currentTab === 0 && (
+            <Box>
+              {offersLoading && (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              )}
+
+              {!offersLoading && activeOffers.length === 0 && (
+                <Paper elevation={2} sx={{ p: 4, textAlign: "center" }}>
+                  <Info sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
+                    No Active Offers
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    You don't have any active upgrade offers at the moment.
+                    {eligibility?.eligible &&
+                      " New offers will appear here automatically."}
+                  </Typography>
+                </Paper>
+              )}
+
+              {!offersLoading && activeOffers.length > 0 && (
+                <Stack spacing={3}>
+                  {activeOffers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      onAccept={handleAcceptOffer}
+                      onDeny={handleDenyOffer}
+                      disabled={
+                        processingOffer === offer.id || !eligibility?.eligible
+                      }
+                      showActions={eligibility?.eligible}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* Pending Confirmation Tab */}
+          {currentTab === 1 && (
+            <Box>
+              {acceptedOffers.length === 0 ? (
+                <Paper elevation={2} sx={{ p: 4, textAlign: "center" }}>
+                  <HourglassEmpty
+                    sx={{ fontSize: 64, color: "text.secondary", mb: 2 }}
+                  />
+                  <Typography variant="h6" color="text.secondary">
+                    No Offers Pending Confirmation
+                  </Typography>
+                </Paper>
+              ) : (
+                <Stack spacing={3}>
+                  {acceptedOffers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      showActions={false}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* Confirmed Tab */}
+          {currentTab === 2 && (
+            <Box>
+              {confirmedOffers.length === 0 ? (
+                <Paper elevation={2} sx={{ p: 4, textAlign: "center" }}>
+                  <CheckCircle
+                    sx={{ fontSize: 64, color: "text.secondary", mb: 2 }}
+                  />
+                  <Typography variant="h6" color="text.secondary">
+                    No Confirmed Upgrades
+                  </Typography>
+                </Paper>
+              ) : (
+                <Stack spacing={3}>
+                  {confirmedOffers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      showActions={false}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* History Tab */}
+          {currentTab === 3 && (
+            <Box>
+              {expiredOffers.length === 0 ? (
+                <Paper elevation={2} sx={{ p: 4, textAlign: "center" }}>
+                  <History
+                    sx={{ fontSize: 64, color: "text.secondary", mb: 2 }}
+                  />
+                  <Typography variant="h6" color="text.secondary">
+                    No Offer History
+                  </Typography>
+                </Paper>
+              ) : (
+                <Stack spacing={3}>
+                  {expiredOffers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      showActions={false}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
+        </>
+      )}
+    </Container>
+  );
 };
 
 export default UpgradeNotificationsPage;

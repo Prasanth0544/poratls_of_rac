@@ -34,10 +34,11 @@ class StationEventService {
     result.boarded = this.boardPassengers(trainState);
 
     // **STEP 2: Deboard passengers** (creates vacant segments)
-    result.deboarded = this.deboardPassengers(trainState);
+    const deboardResult = this.deboardPassengers(trainState);
+    result.deboarded = deboardResult.count;
 
-    // **STEP 3: Process RAC upgrades with strict eligibility**
-    const upgradeResult = await this.processRACUpgradesWithEligibility(trainState);
+    // **STEP 3: Process RAC upgrades ONLY for newly vacant berths (PERFORMANCE OPTIMIZATION)**
+    const upgradeResult = await this.processRACUpgradesWithEligibility(trainState, deboardResult.newlyVacantBerths);
     result.racAllocated = upgradeResult.count;
     result.upgrades = upgradeResult.upgrades;
 
@@ -64,25 +65,39 @@ class StationEventService {
 
   /**
    * Deboard passengers at destination
+   * Returns: { count, newlyVacantBerths }
    */
   deboardPassengers(trainState) {
     let deboardedCount = 0;
     const currentIdx = trainState.currentStationIdx;
+    const newlyVacantBerths = []; // Track berths that just became vacant
 
     trainState.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         const deboardingPassengers = berth.getDeboardingPassengers(currentIdx);
 
-        deboardingPassengers.forEach(p => {
-          console.log(`   👋 ${p.name} (PNR: ${p.pnr}) deboarded at ${p.to}`);
-          berth.removePassenger(p.pnr);
-          deboardedCount++;
-          trainState.stats.totalDeboarded++;
-        });
+        if (deboardingPassengers.length > 0) {
+          deboardingPassengers.forEach(p => {
+            console.log(`   👋 ${p.name} (PNR: ${p.pnr}) deboarded at ${p.to}`);
+            berth.removePassenger(p.pnr);
+            deboardedCount++;
+            trainState.stats.totalDeboarded++;
+          });
+
+          // Track this berth as newly vacant (for targeted vacancy processing)
+          newlyVacantBerths.push({
+            berth,
+            coachNo: coach.coachNo,
+            berthNo: berth.berthNo,
+            fullBerthNo: berth.fullBerthNo,
+            type: berth.type,
+            class: coach.class
+          });
+        }
       });
     });
 
-    return deboardedCount;
+    return { count: deboardedCount, newlyVacantBerths };
   }
 
   /**
@@ -115,25 +130,42 @@ class StationEventService {
 
   /**
    * Process RAC upgrades with strict eligibility checking
-   * Implements the eligibility matrix algorithm
+   * PERFORMANCE OPTIMIZED: Only processes newly vacant berths (from deboarding)
+   * instead of scanning all 688 vacant berths
    */
-  async processRACUpgradesWithEligibility(trainState) {
+  async processRACUpgradesWithEligibility(trainState, newlyVacantBerths = []) {
     const ReallocationService = require('./ReallocationService');
     const currentIdx = trainState.currentStationIdx;
+
     let upgradeCount = 0;
     const upgrades = [];
 
-    console.log(`\n🔍 Checking RAC upgrade eligibility...`);
+    console.log(`\n🎯 Processing RAC upgrades...`);
+    console.log(`   Newly vacant berths: ${newlyVacantBerths.length}`);
 
-    // Get all vacant segment ranges across all berths
-    const vacantSegments = this.getVacantSegmentRanges(trainState);
-
-    if (vacantSegments.length === 0) {
-      console.log(`   No vacant segments available for upgrades`);
+    // OPTIMIZATION: Only check newly vacant berths, not all 688 vacant berths!
+    if (newlyVacantBerths.length === 0) {
+      console.log(`   No new vacancies - skipping RAC upgrade processing`);
       return { count: 0, upgrades: [] };
     }
 
-    console.log(`   Found ${vacantSegments.length} vacant segment(s)`);
+    // Get vacant segment ranges ONLY for newly vacant berths
+    const vacantSegments = [];
+    for (const vacantBerth of newlyVacantBerths) {
+      const ranges = this._getVacantSegmentRangesForBerth(
+        vacantBerth.berth,
+        trainState.stations,
+        { coachNo: vacantBerth.coachNo, class: vacantBerth.class }
+      );
+      vacantSegments.push(...ranges);
+    }
+
+    if (vacantSegments.length === 0) {
+      console.log(`   No vacant segments found in newly vacant berths for upgrades`);
+      return { count: 0, upgrades: [] };
+    }
+
+    console.log(`   Found ${vacantSegments.length} vacant segment(s) in newly vacant berths`);
 
     // For each vacant segment, find the first eligible RAC passenger
     for (const vacantSegment of vacantSegments) {
@@ -248,7 +280,7 @@ class StationEventService {
   }
 
   /**
-   * Board passengers at origin
+   * Board passengers at origin (CNF + RAC passengers)
    */
   boardPassengers(trainState) {
     let boardedCount = 0;
@@ -256,6 +288,7 @@ class StationEventService {
 
     console.log(`\n👥 Boarding passengers at station...`);
 
+    // Board CNF passengers from berths
     trainState.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         const boardingPassengers = berth.getBoardingPassengers(currentIdx);
@@ -266,6 +299,15 @@ class StationEventService {
           boardedCount++;
         });
       });
+    });
+
+    // Also board RAC passengers whose journey starts at current station
+    trainState.racQueue.forEach(rac => {
+      if (rac.fromIdx === currentIdx && !rac.boarded && !rac.noShow) {
+        rac.boarded = true;
+        console.log(`   ✅ RAC: ${rac.name} (PNR: ${rac.pnr}) boarded at ${rac.from}`);
+        boardedCount++;
+      }
     });
 
     return boardedCount;

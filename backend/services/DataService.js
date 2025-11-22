@@ -242,6 +242,7 @@ class DataService {
               ? `RAC ${p.Rac_status}`
               : p.Rac_status || "-",
           berthType: p.Berth_Type,
+          passengerStatus: p.Passenger_Status || "Offline",
           noShow: p.NO_show || false,
           boarded: false,
         });
@@ -293,7 +294,11 @@ class DataService {
           racStatus: p.Rac_status ? `RAC ${p.Rac_status}` : "RAC",
           coach: p.Assigned_Coach,
           seatNo: p.Assigned_berth,
+          berth: `${p.Assigned_Coach}-${p.Assigned_berth}`,
           berthType: p.Berth_Type,
+          passengerStatus: p.Passenger_Status || "Offline",
+          boarded: false, // RAC passengers start as not boarded
+          noShow: p.NO_show || false,
         };
       })
       .sort((a, b) => a.racNumber - b.racNumber);
@@ -330,7 +335,7 @@ class DataService {
       const detailsCol = db.getTrainDetailsCollection();
       const doc = await detailsCol.findOne({ Train_No: parseInt(trainNo) });
       if (doc && doc.Train_Name) return doc.Train_Name;
-    } catch (_) {}
+    } catch (_) { }
 
     // Try to get from stations collection metadata if available
     try {

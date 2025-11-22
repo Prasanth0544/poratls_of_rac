@@ -124,7 +124,10 @@ function HomePage({
         </div>
 
         {/* 3. Apply Reallocation */}
-        <div className="action-card-compact reallocation-card" onClick={() => onNavigate('reallocation')}>
+        <div
+          className="action-card-compact reallocation-card"
+          onClick={() => onNavigate('reallocation')}
+        >
           <div className="card-header">
             <h4>Reallocation</h4>
           </div>
@@ -163,17 +166,20 @@ function HomePage({
           {/* Stat Cards */}
           <div className="stat-box">
             <div className="stat-label">Total Passengers</div>
-            <div className="stat-value">{trainData.stats.totalPassengers}</div>
+            <div className="stat-value">{journeyStarted ? trainData.stats.totalPassengers : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Confirmed (CNF)</div>
-            <div className="stat-value">{trainData.stats.cnfPassengers}</div>
+            <div className="stat-value">{journeyStarted ? trainData.stats.cnfPassengers : '-'}</div>
           </div>
 
-          <div className="stat-box clickable" onClick={() => onNavigate('rac-queue')}>
+          <div
+            className="stat-box clickable"
+            onClick={() => onNavigate('rac-queue')}
+          >
             <div className="stat-label">RAC Queue</div>
-            <div className="stat-value">{trainData.stats.racPassengers}</div>
+            <div className="stat-value">{journeyStarted ? trainData.stats.racPassengers : '-'}</div>
           </div>
 
           <div className="stat-box">
@@ -202,18 +208,27 @@ function HomePage({
             <span className="nav-text">Add Passenger</span>
           </div>
 
-          {/* Navigation Cards */}
-          <div className="nav-card" onClick={() => onNavigate('coaches')}>
+          {/* Navigation Cards - NO LOCKS */}
+          <div
+            className="nav-card"
+            onClick={() => onNavigate('coaches')}
+          >
             <span className="nav-icon">🚂</span>
             <span className="nav-text">Coaches & Berths</span>
           </div>
 
-          <div className="nav-card" onClick={() => onNavigate('passengers')}>
+          <div
+            className="nav-card"
+            onClick={() => onNavigate('passengers')}
+          >
             <span className="nav-icon">👥</span>
             <span className="nav-text">Passenger List</span>
           </div>
 
-          <div className="nav-card" onClick={() => onNavigate('visualization')}>
+          <div
+            className="nav-card"
+            onClick={() => onNavigate('visualization')}
+          >
             <span className="nav-icon">📊</span>
             <span className="nav-text">Segment View</span>
           </div>

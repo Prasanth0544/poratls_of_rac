@@ -1,6 +1,8 @@
 // backend/services/ReallocationService.js
 
 const db = require("../config/db");
+const wsManager = require("../config/websocket");
+const UpgradeNotificationService = require("./UpgradeNotificationService");
 
 class ReallocationService {
   /**
@@ -80,14 +82,183 @@ class ReallocationService {
   }
 
   /**
-   * Get RAC queue - ONLY BOARDED PASSENGERS (currently on train)
-   * Reallocation should only happen for passengers who have boarded
+   * Process vacancy and create upgrade offers for eligible RAC passengers
+   * This is called after a vacancy is created (no-show, cancellation, deboarding)
+   */
+  async processVacancyForUpgrade(trainState, vacantBerthInfo, currentStation) {
+    try {
+      // Validate inputs
+      if (!trainState) {
+        console.error('❌ processVacancyForUpgrade: trainState is null');
+        return { offersCreated: 0, error: 'Invalid train state' };
+      }
+
+      if (!vacantBerthInfo || !vacantBerthInfo.berth) {
+        console.error('❌ processVacancyForUpgrade: Invalid vacantBerthInfo');
+        return { offersCreated: 0, error: 'Invalid berth information' };
+      }
+
+      const { berth, coachNo, berthNo, fullBerthNo, type, class: berthClass } = vacantBerthInfo;
+
+      console.log(`\n🔍 Processing vacancy for upgrade: ${fullBerthNo || `${coachNo}-${berthNo}`}`);
+
+      // Get vacant segment ranges for this berth
+      if (!berth.segmentOccupancy || !Array.isArray(berth.segmentOccupancy)) {
+        console.error('   ❌ Berth missing segmentOccupancy array');
+        return { offersCreated: 0, error: 'Invalid berth structure' };
+      }
+
+      const vacantRanges = this._getVacantSegmentRanges(berth, trainState.stations);
+
+      if (vacantRanges.length === 0) {
+        console.log('   No vacant segments found');
+        return { offersCreated: 0 };
+      }
+
+      let offersCreated = 0;
+
+      // For each vacant range, find eligible RAC passengers
+      for (const range of vacantRanges) {
+        console.log(`   Vacant segment: ${range.fromStation} → ${range.toStation}`);
+
+        // Find eligible RAC passenger for this segment
+        const eligiblePassenger = this.getEligibleRACForVacantSegment(
+          {
+            fromIdx: range.fromIdx,
+            toIdx: range.toIdx,
+            class: berthClass || trainState.coaches[0]?.class || 'SL',
+            coachNo: coachNo,
+            berthNo: berthNo,
+            fullBerthNo: fullBerthNo || `${coachNo}-${berthNo}`,
+            type: type
+          },
+          trainState.currentStationIdx,
+          trainState
+        );
+
+        if (!eligiblePassenger) {
+          console.log('   No eligible RAC passenger found for this segment');
+          continue;
+        }
+
+        console.log(`   ✅ Found eligible passenger: ${eligiblePassenger.name} (${eligiblePassenger.pnr})`);
+
+        // Create upgrade notification
+        const offer = UpgradeNotificationService.createUpgradeNotification(
+          eligiblePassenger,
+          {
+            fullBerthNo: fullBerthNo || `${coachNo}-${berthNo}`,
+            coachNo: coachNo || trainState.coaches[0]?.coachNo,
+            berthNo: berthNo,
+            type: type,
+            vacantSegment: `${range.fromStation} → ${range.toStation}`
+          },
+          currentStation
+        );
+
+        // Check if passenger is online and boarded
+        // Handle both database format (Online_Status) and in-memory format (onlineStatus)
+        const isOnline = eligiblePassenger.Online_Status === 'online' ||
+          eligiblePassenger.onlineStatus === 'online';
+        const isBoarded = eligiblePassenger.boarded === true ||
+          eligiblePassenger.Boarded === true;
+
+        if (isBoarded && isOnline) {
+          // Push offer via WebSocket
+          const sent = wsManager.sendOfferToPassenger(eligiblePassenger.pnr, {
+            id: offer.id,
+            notificationId: offer.id,
+            pnr: eligiblePassenger.pnr,
+            fromBerth: offer.currentBerth,
+            toBerth: offer.offeredBerth,
+            coach: offer.offeredCoach,
+            berthType: offer.offeredBerthType,
+            createdAt: offer.timestamp,
+            expiresAt: new Date(Date.now() + 60000).toISOString(), // 60 seconds
+            status: 'PENDING'
+          });
+
+          if (sent) {
+            console.log(`   📡 Offer sent via WebSocket to ${eligiblePassenger.pnr}`);
+            offersCreated++;
+
+            // Set expiry timer
+            this.scheduleOfferExpiry(offer.id, eligiblePassenger.pnr, 60000);
+          } else {
+            console.log(`   ⚠️  WebSocket send failed, passenger may have disconnected`);
+            // Still count as created - it's in the notification service
+            offersCreated++;
+          }
+        } else {
+          // Passenger is offline or not boarded - offer goes to TTE portal
+          const reason = !isBoarded ? 'not boarded' : 'offline';
+          console.log(`   📋 Passenger ${reason} - offer queued for TTE verification`);
+          offersCreated++;
+        }
+      }
+
+      return { offersCreated };
+    } catch (error) {
+      console.error('❌ Error processing vacancy for upgrade:', error);
+      return { offersCreated: 0, error: error.message };
+    }
+  }
+
+  /**
+   * Schedule offer expiry
+   */
+  scheduleOfferExpiry(offerId, pnr, ttlMs) {
+    setTimeout(() => {
+      try {
+        const notifications = UpgradeNotificationService.getAllNotifications(pnr);
+        const offer = notifications.find(n => n.id === offerId);
+
+        if (offer && offer.status === 'PENDING') {
+          // Mark as expired
+          offer.status = 'EXPIRED';
+          offer.expiredAt = new Date().toISOString();
+
+          // Notify passenger via WebSocket
+          wsManager.notifyOfferExpired(pnr, offerId);
+
+          console.log(`⏰ Offer ${offerId} expired for PNR ${pnr}`);
+        }
+      } catch (error) {
+        console.error('Error expiring offer:', error);
+      }
+    }, ttlMs);
+  }
+
+  /**
+   * Get RAC queue - STRICT FILTERING FOR REALLOCATION
+   * Only returns passengers who meet ALL criteria:
+   * 1. PNR_Status === "RAC" (CRITICAL - only RAC passengers)
+   * 2. Passenger_Status === "Online" (can receive real-time offers)
+   * 3. Boarded === true (physically on the train)
+   *
+   * This ensures reallocation ONLY happens for passengers who:
+   * - Have RAC status (not CNF, not WL)
+   * - Are actively using the system (Online)
+   * - Have physically boarded the train (Boarded)
+   * - Can receive and respond to upgrade notifications
    */
   getRACQueue(trainState) {
-    // FILTER: Only return RAC passengers who have BOARDED the train
-    // This ensures reallocation only works on current onboard passengers
     return trainState.racQueue
-      .filter((rac) => rac.boarded === true) // 🔥 KEY FILTER: Only boarded passengers
+      .filter((rac) => {
+        // CRITICAL FILTER 1: Must have RAC status (not CNF, not WL)
+        const isRAC = rac.pnrStatus && rac.pnrStatus.toUpperCase() === 'RAC';
+
+        // CRITICAL FILTER 2: Passenger must be BOARDED
+        const isBoarded = rac.boarded === true;
+
+        // CRITICAL FILTER 3: Passenger must be ONLINE
+        // Handle both "Online" and "online" for case-insensitivity
+        const isOnline = rac.passengerStatus &&
+          rac.passengerStatus.toLowerCase() === 'online';
+
+        // Only include if ALL THREE conditions are met
+        return isRAC && isBoarded && isOnline;
+      })
       .map((rac) => ({
         pnr: rac.pnr,
         name: rac.name,
@@ -104,7 +275,8 @@ class ReallocationService {
         coach: rac.coach,
         seatNo: rac.seatNo,
         berthType: rac.berthType,
-        boarded: rac.boarded, // Include boarded status in response
+        boarded: rac.boarded,
+        passengerStatus: rac.passengerStatus || 'Offline', // Include passenger status
         berth: rac.coach && rac.seatNo ? `${rac.coach}-${rac.seatNo}` : 'N/A'
       }));
   }
@@ -144,6 +316,7 @@ class ReallocationService {
       berthType: berth.type,
       noShow: passenger.noShow,
       boarded: passenger.boarded,
+      passengerStatus: passenger.passengerStatus || 'Offline',
     };
   }
 
@@ -163,14 +336,27 @@ class ReallocationService {
         // For each vacant range, find eligible RAC passengers
         vacantRanges.forEach((range) => {
           const eligibleRAC = [];
+          const vacancyId = `${coach.coachNo}-${berth.berthNo}-${range.fromIdx}-${range.toIdx}`;
 
           for (const rac of trainState.racQueue) {
             // Check if RAC passenger's journey fits within this vacant range
-            if (
-              rac.fromIdx >= range.fromIdx &&
-              rac.toIdx <= range.toIdx &&
-              berth.isAvailableForSegment(rac.fromIdx, rac.toIdx)
-            ) {
+            const eligibilityResult = this.isEligibleForSegment(
+              rac,
+              {
+                fromIdx: range.fromIdx,
+                toIdx: range.toIdx,
+                class: coach.class,
+                coachNo: coach.coachNo,
+                berthNo: berth.berthNo
+              },
+              trainState.currentStationIdx,
+              trainState,
+              vacancyId
+            );
+
+            // Only add if eligible
+            if (eligibilityResult.eligible &&
+              berth.isAvailableForSegment(rac.fromIdx, rac.toIdx)) {
               eligibleRAC.push({
                 pnr: rac.pnr,
                 name: rac.name,
@@ -185,6 +371,7 @@ class ReallocationService {
                 toIdx: rac.toIdx,
                 class: rac.class,
                 berthType: rac.berthType,
+                eligibilityReason: eligibilityResult.reason
               });
             }
           }
@@ -372,31 +559,131 @@ class ReallocationService {
 
   /**
    * Check if RAC passenger is eligible for a vacant segment
-   * Rules:
-   * 1. Passenger must be boarded
-   * 2. Vacant segment must fully cover passenger's remaining journey
-   * 3. Class must match
+   * COMPLETE RULES (10 Total):
+   * 1. Passenger must be ONLINE (passengerStatus === 'Online')
+   * 2. Passenger must be BOARDED
+   * 3. Vacant segment must fully cover passenger's remaining journey
+   * 4. Class must match
+   * 5. Co-passenger consistency (if applicable)
+   * 6. No conflicting CNF passenger boarding later
+   * 7. Not already offered this vacancy
+   * 8. Not already accepted another offer
+   * 9. RAC rank priority (handled in sorting)
+   * 10. Time-gap constraint (optional)
    */
-  isEligibleForSegment(racPassenger, vacantSegment, currentStationIdx, trainState) {
-    // Rule 1: Must be boarded
-    if (!racPassenger.boarded) {
-      return false;
+  isEligibleForSegment(racPassenger, vacantSegment, currentStationIdx, trainState, vacancyId = null) {
+    // Rule 0: MUST have RAC status (PRIMARY CONSTRAINT)
+    // Only RAC passengers are eligible for reallocation, not CNF or WL
+    const isRAC = racPassenger.pnrStatus && racPassenger.pnrStatus.toUpperCase() === 'RAC';
+    if (!isRAC) {
+      return { eligible: false, reason: 'Passenger is not RAC status (CNF/WL not eligible)' };
     }
 
-    // Rule 2: Vacant segment must fully cover remaining journey
+    // Rule 1: Must be ONLINE
+    // This is the SECONDARY filter - only online passengers get real-time offers
+    const isOnline = racPassenger.passengerStatus &&
+      racPassenger.passengerStatus.toLowerCase() === 'online';
+    if (!isOnline) {
+      return { eligible: false, reason: 'Passenger is offline' };
+    }
+
+    // Rule 2: Must be BOARDED (and not a no-show)
+    if (racPassenger.noShow) {
+      return { eligible: false, reason: 'Passenger marked as no-show' };
+    }
+    if (!racPassenger.boarded) {
+      return { eligible: false, reason: 'Passenger has not boarded' };
+    }
+
+    // Rule 3: Vacant segment must fully cover remaining journey
     const remainingFromIdx = Math.max(racPassenger.fromIdx, currentStationIdx);
     const remainingToIdx = racPassenger.toIdx;
 
     if (vacantSegment.fromIdx > remainingFromIdx || vacantSegment.toIdx < remainingToIdx) {
-      return false;
+      return { eligible: false, reason: 'Vacancy does not cover full journey' };
     }
 
-    // Rule 3: Class must match
+    // Rule 4: Class must match
     if (racPassenger.class !== vacantSegment.class) {
-      return false;
+      return { eligible: false, reason: 'Class mismatch' };
     }
 
-    return true;
+    // Rule 5: Co-passenger consistency check
+    const coPassenger = this.findCoPassenger(racPassenger, trainState);
+    if (coPassenger) {
+      // Both must be valid RAC holders
+      if (coPassenger.noShow) {
+        return { eligible: false, reason: 'Co-passenger is no-show' };
+      }
+      if (coPassenger.pnrStatus === 'CNF') {
+        return { eligible: false, reason: 'Co-passenger already confirmed' };
+      }
+      // Co-passenger must also be boarded
+      if (!coPassenger.boarded) {
+        return { eligible: false, reason: 'Co-passenger not boarded' };
+      }
+    }
+
+    // Rule 6: No conflicting CNF passenger boarding later
+    // Check if any CNF passenger will board this berth during the vacancy
+    const hasConflictingCNF = this.checkConflictingCNFPassenger(
+      vacantSegment,
+      currentStationIdx,
+      trainState
+    );
+    if (hasConflictingCNF) {
+      return { eligible: false, reason: 'Conflicting CNF passenger will board' };
+    }
+
+    // Rule 7: Not already offered this vacancy
+    if (vacancyId && racPassenger.vacancyIdLastOffered === vacancyId) {
+      return { eligible: false, reason: 'Already offered this vacancy' };
+    }
+
+    // Rule 8: Not already accepted another offer
+    if (racPassenger.offerStatus === 'accepted') {
+      return { eligible: false, reason: 'Already accepted another offer' };
+    }
+
+    // Rule 10: Time-gap constraint (optional)
+    // Skip if vacancy is too close to destination (less than 1 segment remaining)
+    const segmentsRemaining = vacantSegment.toIdx - currentStationIdx;
+    if (segmentsRemaining < 1) {
+      return { eligible: false, reason: 'Insufficient time remaining' };
+    }
+
+    // All rules passed
+    return { eligible: true, reason: 'All eligibility criteria met' };
+  }
+
+  /**
+   * Check if any CNF passenger will board this berth during the vacancy period
+   * Rule 6 implementation
+   */
+  checkConflictingCNFPassenger(vacantSegment, currentStationIdx, trainState) {
+    // Find the berth for this vacancy
+    const berth = trainState.findBerth(vacantSegment.coachNo, vacantSegment.berthNo);
+    if (!berth) return false;
+
+    // Check all passengers on this berth
+    for (const passenger of berth.passengers) {
+      // Skip if not CNF
+      if (passenger.pnrStatus !== 'CNF') continue;
+
+      // Skip if already boarded
+      if (passenger.boarded) continue;
+
+      // Check if this CNF passenger will board during the vacancy
+      // Their boarding station must be within the vacant range
+      if (passenger.fromIdx >= vacantSegment.fromIdx &&
+        passenger.fromIdx < vacantSegment.toIdx &&
+        passenger.fromIdx > currentStationIdx) {
+        console.log(`   ⚠️  Conflicting CNF passenger ${passenger.pnr} will board at station ${passenger.fromIdx}`);
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -529,6 +816,19 @@ class ReallocationService {
           }
 
           trainState.stats.totalRACUpgraded++;
+
+          // Notify co-passenger via WebSocket if they're online
+          const coPassOnline = coPassenger.Online_Status === 'online' || coPassenger.onlineStatus === 'online';
+          if (coPassOnline && wsManager) {
+            wsManager.notifyUpgradeConfirmed(coPassengerPNR, {
+              notificationId: 'AUTO_UPGRADE',
+              newBerth: oldBerth.fullBerthNo,
+              coach: oldCoachNo,
+              confirmedAt: new Date().toISOString(),
+              reason: 'Co-passenger inherited CNF status'
+            });
+            console.log(`   📡 Notified co-passenger ${coPassengerPNR} via WebSocket`);
+          }
         } else {
           // Berth has been re-allocated - don't upgrade co-passenger
           console.log(`   ⚠️  Berth ${oldBerth.fullBerthNo} has been re-allocated, skipping co-passenger upgrade`);
@@ -598,14 +898,30 @@ class ReallocationService {
   /**
    * Get eligible RAC passengers for a specific vacant segment
    * Returns the first eligible passenger based on RAC queue priority
+   * Now uses enhanced eligibility rules (10 total)
    */
   getEligibleRACForVacantSegment(vacantSegment, currentStationIdx, trainState) {
+    // Generate unique vacancy ID for tracking
+    const vacancyId = `${vacantSegment.coachNo}-${vacantSegment.berthNo}-${vacantSegment.fromIdx}-${vacantSegment.toIdx}`;
+
     // Iterate through RAC queue in order (priority-based)
     for (const racPassenger of trainState.racQueue) {
-      if (this.isEligibleForSegment(racPassenger, vacantSegment, currentStationIdx, trainState)) {
+      const eligibilityResult = this.isEligibleForSegment(
+        racPassenger,
+        vacantSegment,
+        currentStationIdx,
+        trainState,
+        vacancyId
+      );
+
+      if (eligibilityResult.eligible) {
+        console.log(`   ✅ Eligible: ${racPassenger.name} (${racPassenger.pnr}) - ${eligibilityResult.reason}`);
         return racPassenger;
+      } else {
+        console.log(`   ❌ Not eligible: ${racPassenger.name} (${racPassenger.pnr}) - ${eligibilityResult.reason}`);
       }
     }
+
     return null;
   }
 }

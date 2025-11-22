@@ -1,7 +1,7 @@
 // tte-portal/src/App.jsx
 import React, { useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Tabs, Tab } from '@mui/material';
+import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Tabs, Tab, Badge } from '@mui/material';
 import TrainIcon from '@mui/icons-material/Train';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
@@ -11,6 +11,7 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import Dashboard from './components/Dashboard';
 import PassengerManagement from './components/PassengerManagement';
 import OfflineUpgradeVerification from './components/OfflineUpgradeVerification';
+import useTteSocket from './hooks/useTteSocket';
 import './App.css';
 
 const theme = createTheme({
@@ -32,6 +33,7 @@ const theme = createTheme({
 
 function App() {
     const [currentTab, setCurrentTab] = useState(0);
+    const { isConnected, pendingUpgrades } = useTteSocket();
 
     const handleTabChange = (event, newValue) => {
         setCurrentTab(newValue);
@@ -49,14 +51,21 @@ function App() {
                                 TTE Control Portal
                             </Typography>
                             <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                                Dynamic RAC Reallocation System
+                                Dynamic RAC Reallocation System {isConnected && '🟢 Live'}
                             </Typography>
                         </Box>
                     </Toolbar>
                     <Tabs value={currentTab} onChange={handleTabChange} sx={{ bgcolor: 'primary.dark' }} textColor="inherit">
                         <Tab icon={<DashboardIcon />} label="Dashboard" />
                         <Tab icon={<PeopleIcon />} label="Passenger Management" />
-                        <Tab icon={<VerifiedUserIcon />} label="Offline Upgrades" />
+                        <Tab
+                            icon={
+                                <Badge badgeContent={pendingUpgrades.length} color="error">
+                                    <VerifiedUserIcon />
+                                </Badge>
+                            }
+                            label="Offline Upgrades"
+                        />
                     </Tabs>
                 </AppBar>
 

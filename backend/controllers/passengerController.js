@@ -1,5 +1,6 @@
 // backend/controllers/passengerController.js
 const DataService = require("../services/DataService");
+const PassengerService = require("../services/PassengerService");
 const db = require("../config/db");
 const wsManager = require("../config/websocket");
 const trainController = require("./trainController");
@@ -15,49 +16,24 @@ class PassengerController {
       if (!pnr) {
         return res.status(400).json({
           success: false,
-          message: "PNR number is required"
-        });
-      }
-
-      const passengersCollection = db.getPassengersCollection();
-      const passenger = await passengersCollection.findOne({ PNR_Number: pnr });
-
-      if (!passenger) {
-        return res.status(404).json({
-          success: false,
-          message: "PNR not found"
+          message: "PNR number is required",
         });
       }
 
       const trainState = trainController.getGlobalTrainState();
-      const stationData = trainState ? trainState.stations.find(s => s.code === passenger.Boarding_Station) : null;
+      const passengerDetails = await PassengerService.getPassengerDetails(pnr, trainState);
 
       res.json({
         success: true,
-        data: {
-          pnr: passenger.PNR_Number,
-          name: passenger.Name,
-          age: passenger.Age,
-          gender: passenger.Gender,
-          trainNo: passenger.Train_Number,
-          trainName: trainState ? trainState.trainName : "Unknown",
-          berth: `${passenger.Assigned_Coach}-${passenger.Assigned_berth}`,
-          berthType: passenger.Berth_Type,
-          pnrStatus: passenger.PNR_Status,
-          racStatus: passenger.Rac_status,
-          class: passenger.Class,
-          boardingStation: passenger.Boarding_Station,
-          boardingTime: stationData ? stationData.arrival : "N/A",
-          destinationStation: passenger.Deboarding_Station,
-          boarded: passenger.NO_show ? false : true,
-          noShow: passenger.NO_show || false
-        }
+        data: passengerDetails
       });
     } catch (error) {
       console.error("❌ Error getting PNR details:", error);
-      res.status(500).json({
+
+      const statusCode = error.message === 'PNR not found' ? 404 : 500;
+      res.status(statusCode).json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -72,7 +48,7 @@ class PassengerController {
       if (!pnr) {
         return res.status(400).json({
           success: false,
-          message: "PNR number is required"
+          message: "PNR number is required",
         });
       }
 
@@ -82,20 +58,20 @@ class PassengerController {
       if (!trainState) {
         return res.status(400).json({
           success: false,
-          message: "Train not initialized"
+          message: "Train not initialized",
         });
       }
 
       // Update MongoDB
       const result = await passengersCollection.updateOne(
         { PNR_Number: pnr },
-        { $set: { NO_show: true } }
+        { $set: { NO_show: true } },
       );
 
       if (result.matchedCount === 0) {
         return res.status(404).json({
           success: false,
-          message: "PNR not found"
+          message: "PNR not found",
         });
       }
 
@@ -117,22 +93,22 @@ class PassengerController {
 
       // Broadcast update
       if (wsManager) {
-        wsManager.broadcastTrainUpdate('NO_SHOW_MARKED', {
+        wsManager.broadcastTrainUpdate("NO_SHOW_MARKED", {
           pnr: pnr,
-          stats: trainState.stats
+          stats: trainState.stats,
         });
       }
 
       res.json({
         success: true,
         message: "Passenger marked as no-show successfully",
-        data: { pnr: pnr }
+        data: { pnr: pnr },
       });
     } catch (error) {
       console.error("❌ Error marking no-show:", error);
       res.status(500).json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -572,24 +548,17 @@ class PassengerController {
         });
       }
 
+      // Use getAllPassengers() which includes both berth passengers AND RAC queue
       const allPassengers = trainState.getAllPassengers();
 
       const counts = {
-        total: trainState.stats.totalPassengers,
-        cnf: trainState.stats.cnfPassengers,
-        rac: trainState.stats.racPassengers,
-        racCnf: trainState.stats.totalRACUpgraded || 0,
-        boarded: allPassengers.filter((p) => p.boarded).length,
+        total: allPassengers.length,
+        cnf: allPassengers.filter((p) => p.pnrStatus === "CNF").length,
+        rac: allPassengers.filter((p) => p.pnrStatus === "RAC").length,
+        boarded: allPassengers.filter((p) => p.boarded && !p.noShow).length,
         noShow: allPassengers.filter((p) => p.noShow).length,
-        upcoming: allPassengers.filter(
-          (p) => p.fromIdx > trainState.currentStationIdx && !p.noShow,
-        ).length,
-        missed: allPassengers.filter(
-          (p) =>
-            p.fromIdx <= trainState.currentStationIdx &&
-            !p.boarded &&
-            !p.noShow,
-        ).length,
+        online: allPassengers.filter((p) => p.passengerStatus && p.passengerStatus.toLowerCase() === 'online').length,
+        offline: allPassengers.filter((p) => !p.passengerStatus || p.passengerStatus.toLowerCase() === 'offline').length,
       };
 
       res.json({
@@ -611,23 +580,24 @@ class PassengerController {
   getUpgradeNotifications(req, res) {
     try {
       const { pnr } = req.params;
-      const UpgradeNotificationService = require('../services/UpgradeNotificationService');
+      const UpgradeNotificationService = require("../services/UpgradeNotificationService");
 
-      const notifications = UpgradeNotificationService.getPendingNotifications(pnr);
+      const notifications =
+        UpgradeNotificationService.getPendingNotifications(pnr);
 
       res.json({
         success: true,
         data: {
           pnr: pnr,
           count: notifications.length,
-          notifications: notifications
-        }
+          notifications: notifications,
+        },
       });
     } catch (error) {
       console.error("❌ Error getting upgrade notifications:", error);
       res.status(500).json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -639,59 +609,53 @@ class PassengerController {
     try {
       const { pnr, notificationId } = req.body;
 
+      // Validation
       if (!pnr || !notificationId) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields: pnr, notificationId"
+          message: "Missing required fields: pnr, notificationId",
         });
       }
-
-      const UpgradeNotificationService = require('../services/UpgradeNotificationService');
-      const ReallocationService = require('../services/ReallocationService');
-      const trainController = require('./trainController'); // Assuming trainController is available or imported
-      const wsManager = require('../utils/wsManager'); // Assuming wsManager is available or imported
 
       const trainState = trainController.getGlobalTrainState();
 
       if (!trainState) {
         return res.status(400).json({
           success: false,
-          message: "Train not initialized"
+          message: "Train not initialized",
         });
       }
 
-      // Accept the notification
-      const notification = UpgradeNotificationService.acceptUpgrade(pnr, notificationId);
+      // Call service for business logic
+      const result = await PassengerService.acceptUpgrade(pnr, notificationId, trainState);
 
-      // Perform the actual upgrade
-      const upgradeResult = await ReallocationService.upgradeRACPassengerWithCoPassenger(
-        pnr,
-        {
-          coachNo: notification.offeredCoach,
-          berthNo: notification.offeredSeatNo
-        },
-        trainState
-      );
+      // Note: Actual upgrade will be performed by TTE confirmation
+      // This just marks the passenger's acceptance
 
-      // Broadcast update
+      // Broadcast update via WebSocket
       if (wsManager) {
-        wsManager.broadcastTrainUpdate('RAC_UPGRADE_ACCEPTED', {
+        wsManager.broadcastTrainUpdate("RAC_UPGRADE_ACCEPTED", {
           pnr: pnr,
-          upgrade: upgradeResult
+          notification: result.notification,
+          passenger: result.passenger
         });
       }
 
       res.json({
         success: true,
-        message: "Upgrade accepted and processed",
-        data: upgradeResult
+        message: result.message,
+        data: result
       });
-
     } catch (error) {
       console.error("❌ Error accepting upgrade:", error);
-      res.status(500).json({
+
+      const statusCode = error.message.includes('not found') ? 404 :
+        error.message.includes('expired') ? 400 :
+          error.message.includes('already') ? 400 : 500;
+
+      res.status(statusCode).json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -699,42 +663,125 @@ class PassengerController {
   /**
    * Deny an upgrade offer
    */
-  denyUpgrade(req, res) {
+  async denyUpgrade(req, res) {
     try {
       const { pnr, notificationId, reason } = req.body;
 
+      // Validation
       if (!pnr || !notificationId) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields: pnr, notificationId"
+          message: "Missing required fields: pnr, notificationId",
         });
       }
 
-      const UpgradeNotificationService = require('../services/UpgradeNotificationService');
-      const wsManager = require('../utils/wsManager'); // Assuming wsManager is available or imported
+      // Call service for business logic
+      const result = await PassengerService.denyUpgrade(pnr, notificationId);
 
-      const notification = UpgradeNotificationService.denyUpgrade(
-        pnr,
-        notificationId,
-        reason || 'Passenger declined'
-      );
-
-      // Broadcast update
+      // Broadcast update via WebSocket
       if (wsManager) {
-        wsManager.broadcastTrainUpdate('RAC_UPGRADE_DENIED', {
+        wsManager.broadcastTrainUpdate("RAC_UPGRADE_DENIED", {
           pnr: pnr,
-          notification: notification
+          notification: result.notification,
+          reason: reason || "Passenger declined"
         });
       }
 
       res.json({
         success: true,
-        message: "Upgrade denied and logged",
-        data: notification
+        message: result.message,
+        data: result.notification,
       });
-
     } catch (error) {
       console.error("❌ Error denying upgrade:", error);
+
+      const statusCode = error.message.includes('not found') ? 404 :
+        error.message.includes('already') ? 400 : 500;
+
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Set passenger online/offline status
+   * Used to mark passengers as available for reallocation
+   */
+  async setPassengerStatus(req, res) {
+    try {
+      const { pnr, status } = req.body;
+
+      if (!pnr || !status) {
+        return res.status(400).json({
+          success: false,
+          message: "PNR and status are required"
+        });
+      }
+
+      if (status !== 'online' && status !== 'offline') {
+        return res.status(400).json({
+          success: false,
+          message: "Status must be 'online' or 'offline'"
+        });
+      }
+
+      const trainState = trainController.getGlobalTrainState();
+      if (!trainState) {
+        return res.status(400).json({
+          success: false,
+          message: "Train not initialized"
+        });
+      }
+
+      // Find passenger in train state
+      const passengerLocation = trainState.findPassenger(pnr);
+      if (!passengerLocation) {
+        return res.status(404).json({
+          success: false,
+          message: "Passenger not found"
+        });
+      }
+
+      const passenger = passengerLocation.passenger;
+      const capitalizedStatus = status.charAt(0).toUpperCase() + status.slice(1);
+
+      // Update in-memory state
+      passenger.passengerStatus = capitalizedStatus;
+
+      // Update MongoDB
+      try {
+        const passengersCollection = db.getPassengersCollection();
+        await passengersCollection.updateOne(
+          { PNR_Number: pnr },
+          { $set: { Passenger_Status: capitalizedStatus } }
+        );
+        console.log(`✅ Updated passenger status in MongoDB: ${pnr} -> ${capitalizedStatus}`);
+      } catch (dbError) {
+        console.error(`⚠️  Failed to update MongoDB:`, dbError.message);
+      }
+
+      // Update RAC queue if this is a RAC passenger
+      const racPassenger = trainState.racQueue.find(r => r.pnr === pnr);
+      if (racPassenger) {
+        racPassenger.passengerStatus = capitalizedStatus;
+      }
+
+      console.log(`🔄 Passenger ${pnr} status updated: ${capitalizedStatus}`);
+
+      res.json({
+        success: true,
+        message: `Passenger status updated to ${capitalizedStatus}`,
+        data: {
+          pnr: pnr,
+          name: passenger.name,
+          status: capitalizedStatus,
+          pnrStatus: passenger.pnrStatus
+        }
+      });
+    } catch (error) {
+      console.error("❌ Error setting passenger status:", error);
       res.status(500).json({
         success: false,
         error: error.message

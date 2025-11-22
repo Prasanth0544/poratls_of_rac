@@ -6,8 +6,66 @@ import {
   getPassengerCounts,
   searchPassenger,
   getRACQueue,
+  setPassengerStatus,
 } from "../services/api";
 import "./PassengersPage.css";
+
+// Passenger Status Button Component
+function PassengerStatusButton({ passenger, onStatusUpdate }) {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showButtons, setShowButtons] = useState(false);
+
+  const currentStatus = passenger.passengerStatus || 'Offline';
+
+  const handleToggle = async (newStatus) => {
+    setIsUpdating(true);
+    try {
+      await onStatusUpdate(passenger.pnr, newStatus);
+      setShowButtons(false);
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (showButtons) {
+    return (
+      <div className="status-buttons-container">
+        <button
+          onClick={() => handleToggle('online')}
+          disabled={isUpdating}
+          className="status-btn online-btn"
+        >
+          Online
+        </button>
+        <button
+          onClick={() => handleToggle('offline')}
+          disabled={isUpdating}
+          className="status-btn offline-btn"
+        >
+          Offline
+        </button>
+        <button
+          onClick={() => setShowButtons(false)}
+          className="status-btn cancel-btn"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setShowButtons(true)}
+      disabled={isUpdating}
+      className={`current-status-btn ${currentStatus.toLowerCase()}`}
+    >
+      {currentStatus}
+    </button>
+  );
+}
 
 function PassengersPage({ trainData, onClose, onNavigate }) {
   const [passengers, setPassengers] = useState([]);
@@ -181,6 +239,17 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     }
   };
 
+  const handleStatusUpdate = async (pnr, status) => {
+    try {
+      await setPassengerStatus(pnr, status);
+      // Reload passengers to show updated status
+      await loadData();
+    } catch (error) {
+      console.error('Error updating passenger status:', error);
+      alert(error.message || 'Failed to update passenger status');
+    }
+  };
+
   const applyFilters = () => {
     let filtered = [...passengers];
 
@@ -204,6 +273,12 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
         break;
       case "no-show":
         filtered = filtered.filter((p) => p.noShow === true);
+        break;
+      case "online":
+        filtered = filtered.filter((p) => p.passengerStatus && p.passengerStatus.toLowerCase() === 'online');
+        break;
+      case "offline":
+        filtered = filtered.filter((p) => !p.passengerStatus || p.passengerStatus.toLowerCase() === 'offline');
         break;
       case "upcoming":
         filtered = filtered.filter(
@@ -305,6 +380,14 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             <div className="pass-stat-label">No-Show</div>
             <div className="pass-stat-value">{counts.noShow}</div>
           </div>
+          <div className="pass-stat" onClick={() => setFilterStatus("online")}>
+            <div className="pass-stat-label">Online</div>
+            <div className="pass-stat-value">{counts.online || 0}</div>
+          </div>
+          <div className="pass-stat" onClick={() => setFilterStatus("offline")}>
+            <div className="pass-stat-label">Offline</div>
+            <div className="pass-stat-value">{counts.offline || 0}</div>
+          </div>
         </div>
       )}
 
@@ -333,6 +416,8 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
           <option value="rac">RAC</option>
           <option value="boarded">Boarded</option>
           <option value="no-show">No-Show</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
           <option value="upcoming">Upcoming</option>
         </select>
 
@@ -506,6 +591,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                     <th>To</th>
                     <th>Berth</th>
                     <th>Boarded</th>
+                    <th>Passenger Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -530,6 +616,9 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                       <td className="td-berth">{p.berth}</td>
                       <td className="td-boarded">
                         {p.noShow ? "❌" : p.boarded ? "✅" : "⏳"}
+                      </td>
+                      <td className="td-passenger-status">
+                        <PassengerStatusButton passenger={p} onStatusUpdate={handleStatusUpdate} />
                       </td>
                     </tr>
                   ))}

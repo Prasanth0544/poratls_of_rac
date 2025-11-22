@@ -202,10 +202,19 @@ class TTEController {
         try {
             const { pnr, notificationId } = req.body;
 
+            // Validation: Required fields
             if (!pnr || !notificationId) {
                 return res.status(400).json({
                     success: false,
                     message: "Missing required fields: pnr, notificationId"
+                });
+            }
+
+            // Validation: PNR format
+            if (typeof pnr !== 'string' || pnr.length !== 10) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid PNR format"
                 });
             }
 
@@ -219,15 +228,34 @@ class TTEController {
                 });
             }
 
+            // Validation: Check if notification exists
+            const allNotifications = UpgradeNotificationService.getAllNotifications(pnr);
+            const notification = allNotifications.find(n => n.id === notificationId);
+
+            if (!notification) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Notification not found"
+                });
+            }
+
+            // Validation: Check notification status
+            if (notification.status !== 'PENDING' && notification.status !== 'ACCEPTED') {
+                return res.status(400).json({
+                    success: false,
+                    message: `Notification already ${notification.status.toLowerCase()}`
+                });
+            }
+
             //Accept the notification
-            const notification = UpgradeNotificationService.acceptUpgrade(pnr, notificationId);
+            const acceptedNotification = UpgradeNotificationService.acceptUpgrade(pnr, notificationId);
 
             // Perform the actual upgrade
             const upgradeResult = await ReallocationService.upgradeRACPassengerWithCoPassenger(
                 pnr,
                 {
-                    coachNo: notification.offeredCoach,
-                    berthNo: notification.offeredSeatNo
+                    coachNo: acceptedNotification.offeredCoach,
+                    berthNo: acceptedNotification.offeredSeatNo
                 },
                 trainState
             );
@@ -237,6 +265,14 @@ class TTEController {
                 wsManager.broadcastTrainUpdate('TTE_UPGRADE_CONFIRMED', {
                     pnr: pnr,
                     upgrade: upgradeResult
+                });
+
+                // Notify passenger directly via WebSocket
+                wsManager.notifyUpgradeConfirmed(pnr, {
+                    notificationId: notificationId,
+                    newBerth: acceptedNotification.offeredBerth,
+                    coach: acceptedNotification.offeredCoach,
+                    confirmedAt: new Date().toISOString()
                 });
             }
 

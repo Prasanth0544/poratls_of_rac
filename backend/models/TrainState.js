@@ -14,7 +14,7 @@ class TrainState {
     this.coaches = [];
     this.racQueue = [];
     this.segmentMatrix = null;
-    
+
     this.stats = {
       totalPassengers: 0,
       currentOnboard: 0,
@@ -73,7 +73,7 @@ class TrainState {
     if (coachClass === '3A') {
       return this.getBerthType3A(seatNo);
     }
-    
+
     // Sleeper (SL) coaches use 72 berths
     const berthMapping = {
       lowerBerths: [1, 4, 9, 12, 17, 20, 25, 28, 33, 36, 41, 44, 49, 52, 57, 60, 65, 68],
@@ -88,7 +88,7 @@ class TrainState {
     if (berthMapping.upperBerths.includes(seatNo)) return "Upper Berth";
     if (berthMapping.sideLower.includes(seatNo)) return "Side Lower";
     if (berthMapping.sideUpper.includes(seatNo)) return "Side Upper";
-    
+
     return "Lower Berth";
   }
 
@@ -109,7 +109,7 @@ class TrainState {
     if (berthMapping3A.upperBerths.includes(seatNo)) return "Upper Berth";
     if (berthMapping3A.sideLower.includes(seatNo)) return "Side Lower";
     if (berthMapping3A.sideUpper.includes(seatNo)) return "Side Upper";
-    
+
     return "Lower Berth";
   }
 
@@ -118,7 +118,7 @@ class TrainState {
    */
   startJourney() {
     this.journeyStarted = true;
-    
+
     // Board all passengers at the origin station (idx 0)
     let boardedCount = 0;
     this.coaches.forEach(coach => {
@@ -132,10 +132,10 @@ class TrainState {
         });
       });
     });
-    
+
     // Update statistics after boarding
     this.updateStats();
-    
+
     console.log(`🚂 Journey Started: ${boardedCount} passengers boarded at origin`);
     this.logEvent('JOURNEY_STARTED', `Journey started - ${boardedCount} passengers boarded at origin`);
   }
@@ -146,7 +146,7 @@ class TrainState {
   findBerth(coachNo, seatNo) {
     const coach = this.coaches.find(c => c.coachNo === coachNo);
     if (!coach) return null;
-    
+
     return coach.berths.find(b => b.berthNo == seatNo);
   }
 
@@ -181,7 +181,7 @@ class TrainState {
     let vacant = 0;
     let occupied = 0;
     const currentIdx = this.currentStationIdx;
-    
+
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         // Count berth status at CURRENT station using segment occupancy
@@ -190,19 +190,19 @@ class TrainState {
         } else if (berth.segmentOccupancy && berth.segmentOccupancy[currentIdx] !== null) {
           occupied++;
         }
-        
+
         // Count boarded passengers (actual people, not berths)
         const boardedPassengers = berth.getBoardedPassengers();
         totalOnboard += boardedPassengers.length;
       });
     });
-    
+
     this.stats.currentOnboard = totalOnboard;
     this.stats.vacantBerths = vacant;
     this.stats.occupiedBerths = occupied;
     this.stats.racPassengers = this.racQueue.length;
     this.stats.totalBoarded = totalOnboard;
-    
+
     // Debug log to verify counts
     console.log(`📊 Stats Update: Vacant=${vacant}, Occupied=${occupied}, Total=${vacant + occupied}, Onboard=${totalOnboard}, RAC Queue=${this.racQueue.length}`);
   }
@@ -258,10 +258,12 @@ class TrainState {
   }
 
   /**
-   * Get all passengers
+   * Get all passengers (from berths AND RAC queue)
    */
   getAllPassengers() {
     const passengers = [];
+
+    // Get passengers from berths (CNF passengers)
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         berth.passengers.forEach(p => {
@@ -274,6 +276,20 @@ class TrainState {
         });
       });
     });
+
+    // Also include RAC queue passengers (they may not be in berths yet)
+    this.racQueue.forEach(rac => {
+      // Check if this RAC passenger is already in the berth passengers
+      const alreadyIncluded = passengers.find(p => p.pnr === rac.pnr);
+      if (!alreadyIncluded) {
+        passengers.push({
+          ...rac,
+          boarded: rac.boarded || false,
+          noShow: rac.noShow || false
+        });
+      }
+    });
+
     return passengers;
   }
 }

@@ -144,6 +144,9 @@ export const addPassenger = async (passengerData) => {
   return response.data;
 };
 
+export const setPassengerStatus = (pnr, status) =>
+  handleRequest(() => api.post('/passenger/set-status', { pnr, status }));
+
 // ========================== EXPORT DEFAULT ==========================
 
 export default api;

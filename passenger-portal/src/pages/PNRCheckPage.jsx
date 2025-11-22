@@ -47,7 +47,14 @@ const PNRCheckPage = () => {
             const response = await passengerAPI.getPNRDetails(pnr.toUpperCase());
             setPnrDetails(response.data);
         } catch (err) {
-            setError(err.response?.data?.message || 'PNR not found. Please check and try again.');
+            const errorMessage = err.response?.data?.message || 'PNR not found. Please check and try again.';
+
+            // Check if journey hasn't started
+            if (errorMessage.includes('Journey has not started') || errorMessage.includes('not started')) {
+                setError('🚂 Journey has not started yet. Passenger details will be available once the train journey begins. Please check back later.');
+            } else {
+                setError(errorMessage);
+            }
         } finally {
             setLoading(false);
         }
@@ -63,7 +70,14 @@ const PNRCheckPage = () => {
             const response = await passengerAPI.getPNRDetails(pnrDetails.pnr);
             setPnrDetails(response.data);
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to cancel booking');
+            const errorMessage = err.response?.data?.message || 'Failed to cancel booking';
+
+            // Check if journey hasn't started
+            if (errorMessage.includes('Journey has not started') || errorMessage.includes('not started')) {
+                alert('🚂 Journey has not started yet. Cancellation will be available once the train journey begins.');
+            } else {
+                alert(errorMessage);
+            }
         } finally {
             setLoading(false);
         }

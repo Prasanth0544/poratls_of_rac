@@ -10,71 +10,47 @@ function CoachesPage({ trainData, onClose }) {
 
   if (!trainData || !trainData.coaches) return null;
 
-  // Handle coach type selection
   const handleCoachTypeChange = (type) => {
     setSelectedCoachType(type);
   };
 
-  // Scroll functions for navigation arrows
   const scroll = (direction) => {
     if (scrollContainerRef.current) {
-      const scrollAmount = 340; // Card width + gap
+      const scrollAmount = 400;
       const currentScroll = scrollContainerRef.current.scrollLeft;
       scrollContainerRef.current.scrollTo({
-        left:
-          currentScroll + (direction === "left" ? -scrollAmount : scrollAmount),
+        left: currentScroll + (direction === "left" ? -scrollAmount : scrollAmount),
         behavior: "smooth",
       });
     }
   };
 
-  // Get berth status at CURRENT station (segment-based)
   const getBerthStatusClass = (berth) => {
-    // CRITICAL: If journey hasn't started, all berths are vacant (passengers haven't boarded yet)
-    if (!trainData.journeyStarted) {
-      return "vacant";
-    }
+    if (!trainData.journeyStarted) return "vacant";
 
     const segments = berth.segmentOccupancy || berth.segments;
     const currentStationIdx = trainData.currentStationIdx || 0;
 
-    // Check segment occupancy at current station
-    if (
-      segments &&
-      Array.isArray(segments) &&
-      segments.length > currentStationIdx
-    ) {
+    if (segments && Array.isArray(segments) && segments.length > currentStationIdx) {
       const currentSegment = segments[currentStationIdx];
-
-      // null = vacant at this station
-      if (currentSegment === null || currentSegment === undefined) {
-        return "vacant";
-      }
-
-      // Check if it's a shared berth (RAC)
+      if (currentSegment === null || currentSegment === undefined) return "vacant";
       if (berth.status === "SHARED") return "shared";
-
       return "occupied";
     }
 
-    // Fallback to overall status
     if (berth.status === "VACANT") return "vacant";
     if (berth.status === "SHARED") return "shared";
     return "occupied";
   };
 
+  const filteredCoaches = selectedCoachType === "sleeper"
+    ? trainData.coaches.filter((c) => c.class === "SL")
+    : trainData.coaches.filter((c) => c.class === "3A");
+
   return (
     <div className="coaches-page">
       <div className="page-header">
-        <button className="back-btn" onClick={onClose}>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
+        <button className="back-btn" onClick={onClose} title="Go Back">
           ◄
         </button>
         <h2>🚂 Train Coaches & Berths</h2>
@@ -92,7 +68,6 @@ function CoachesPage({ trainData, onClose }) {
         </span>
       </div>
 
-      {/* Coach Type Selection */}
       <div className="coach-type-selector">
         <button
           className={`coach-type-btn ${selectedCoachType === "sleeper" ? "active" : ""}`}
@@ -108,21 +83,17 @@ function CoachesPage({ trainData, onClose }) {
         </button>
       </div>
 
-      {/* Navigation arrows and horizontal scroller */}
       <div className="coaches-container">
-        <button
-          className="scroll-arrow scroll-left"
-          onClick={() => scroll("left")}
-        >
+        <button className="scroll-arrow scroll-left" onClick={() => scroll("left")}>
           ‹
         </button>
 
         <div className="coaches-grid" ref={scrollContainerRef}>
-          {(selectedCoachType === "sleeper"
-            ? trainData.coaches.filter((c) => c.class === "SL")
-            : trainData.coaches.filter((c) => c.class === "3A")
-          ).map((coach) => (
-            <div key={coach.coachNo} className="coach-card">
+          {filteredCoaches.map((coach) => (
+            <div
+              key={coach.coachNo}
+              className="coach-card"
+            >
               <div className="coach-header">
                 <h4>{coach.coachNo}</h4>
                 <span className="coach-class">{coach.class}</span>
@@ -146,21 +117,17 @@ function CoachesPage({ trainData, onClose }) {
                 {!trainData.journeyStarted
                   ? coach.capacity
                   : coach.berths.filter((b) => {
-                      const segments = b.segmentOccupancy || b.segments;
-                      const currentStationIdx =
-                        trainData.currentStationIdx || 0;
-                      return segments && segments[currentStationIdx] === null;
-                    }).length}{" "}
+                    const segments = b.segmentOccupancy || b.segments;
+                    const idx = trainData.currentStationIdx || 0;
+                    return segments && segments[idx] === null;
+                  }).length}{" "}
                 / {coach.capacity}
               </div>
             </div>
           ))}
         </div>
 
-        <button
-          className="scroll-arrow scroll-right"
-          onClick={() => scroll("right")}
-        >
+        <button className="scroll-arrow scroll-right" onClick={() => scroll("right")}>
           ›
         </button>
       </div>
@@ -178,49 +145,27 @@ function CoachesPage({ trainData, onClose }) {
   );
 }
 
-function BerthDetailsModal({
-  berth,
-  onClose,
-  currentStationIdx,
-  stations,
-  journeyStarted,
-}) {
-  // If journey hasn't started, show a message instead of berth details
+function BerthDetailsModal({ berth, onClose, currentStationIdx, stations, journeyStarted }) {
   if (!journeyStarted) {
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <button className="back-btn" onClick={onClose}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-              ◄
-            </button>
             <h3>🛏️ Berth Details: {berth.fullBerthNo}</h3>
+            <button className="back-btn" onClick={onClose}>✕</button>
           </div>
-
           <div className="modal-body">
             <div className="info-row">
               <strong>Type:</strong> {berth.type}
             </div>
             <div className="info-row">
               <strong>Status:</strong>
-              <span className={`status-tag vacant`}>VACANT</span>
+              <span className="status-tag vacant">VACANT</span>
             </div>
-
             <div className="vacant-message">
               <div className="vacant-icon">💺</div>
               <h4>This berth is currently vacant</h4>
-              <p>
-                Journey has not started yet. Passenger details will be available
-                once the journey begins.
-              </p>
+              <p>Journey has not started yet. Passenger details will be available once the journey begins.</p>
             </div>
           </div>
         </div>
@@ -232,29 +177,16 @@ function BerthDetailsModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <button className="back-btn" onClick={onClose}>
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            ◄
-          </button>
           <h3>🛏️ Berth Details: {berth.fullBerthNo}</h3>
+          <button className="back-btn" onClick={onClose}>✕</button>
         </div>
-
         <div className="modal-body">
           <div className="info-row">
             <strong>Type:</strong> {berth.type}
           </div>
           <div className="info-row">
             <strong>Status:</strong>
-            <span className={`status-tag ${berth.status.toLowerCase()}`}>
-              {berth.status}
-            </span>
+            <span className={`status-tag ${berth.status.toLowerCase()}`}>{berth.status}</span>
           </div>
           <div className="info-row">
             <strong>Passengers:</strong> {berth.passengers.length}
@@ -267,36 +199,23 @@ function BerthDetailsModal({
                 <div key={`${p.pnr}-${idx}`} className="passenger-card">
                   <div className="passenger-header">
                     <strong>{p.name}</strong>
-                    <span className="age-gender">
-                      ({p.age}/{p.gender})
-                    </span>
-                    <span
-                      className={`pnr-badge ${(p.pnrStatus || "").toLowerCase().replace(" ", "-")}`}
-                    >
+                    <span className="age-gender">({p.age}/{p.gender})</span>
+                    <span className={`pnr-badge ${(p.pnrStatus || "").toLowerCase().replace(" ", "-")}`}>
                       {p.pnrStatus}
                     </span>
                   </div>
-
-                  <div className="journey-info">
-                    🚉 {p.from} → {p.to}
-                  </div>
-
+                  <div className="journey-info">🚉 {p.from} → {p.to}</div>
                   <div className="passenger-status">
                     {p.noShow ? (
                       <span className="status-icon no-show">❌ No-Show</span>
                     ) : p.boarded ? (
                       <span className="status-icon boarded">✅ Boarded</span>
                     ) : p.fromIdx <= currentStationIdx ? (
-                      <span className="status-icon missed">
-                        ⚠️ Missed Boarding
-                      </span>
+                      <span className="status-icon missed">⚠️ Missed Boarding</span>
                     ) : (
-                      <span className="status-icon waiting">
-                        ⏳ Not Yet Boarded
-                      </span>
+                      <span className="status-icon waiting">⏳ Not Yet Boarded</span>
                     )}
                   </div>
-
                   <div className="passenger-meta">
                     <div className="meta-item">
                       <strong>PNR:</strong> <code>{p.pnr}</code>

@@ -1,10 +1,11 @@
-// backend/config/websocket.js - CORRECTED
-const WebSocket = require('ws');
+// backend/config/websocket.js - Enhanced with Real-time Offer Push
+const WebSocket = require("ws");
 
 class WebSocketManager {
   constructor() {
     this.wss = null;
     this.clients = new Set();
+    this.pnrSubscriptions = new Map(); // PNR -> Set of WebSocket clients
   }
 
   /**
@@ -13,67 +14,84 @@ class WebSocketManager {
   initialize(server) {
     this.wss = new WebSocket.Server({ server });
 
-    this.wss.on('connection', (ws, req) => {
+    this.wss.on("connection", (ws, req) => {
       const clientId = this.generateClientId();
       ws.clientId = clientId;
-      ws.subscribed = true; // Default: subscribed to updates
+      ws.subscribed = true;
+      ws.subscribedPNRs = new Set(); // Track which PNRs this client is subscribed to
       this.clients.add(ws);
 
-      console.log(`✅ WebSocket client connected: ${clientId} (${req.socket.remoteAddress})`);
+      console.log(
+        `✅ WebSocket client connected: ${clientId} (${req.socket.remoteAddress})`,
+      );
       console.log(`   Total clients: ${this.clients.size}`);
 
       // Send welcome message
       this.sendToClient(ws, {
-        type: 'CONNECTION_SUCCESS',
+        type: "CONNECTION_SUCCESS",
         clientId: clientId,
-        message: 'Connected to RAC Reallocation System',
-        timestamp: new Date().toISOString()
+        message: "Connected to RAC Reallocation System",
+        timestamp: new Date().toISOString(),
       });
 
       // Handle incoming messages
-      ws.on('message', (message) => {
+      ws.on("message", (message) => {
         try {
           const data = JSON.parse(message.toString());
           this.handleClientMessage(ws, data);
         } catch (error) {
-          console.error(`Error parsing WebSocket message from ${clientId}:`, error);
+          console.error(
+            `Error parsing WebSocket message from ${clientId}:`,
+            error,
+          );
           this.sendToClient(ws, {
-            type: 'ERROR',
-            message: 'Invalid message format'
+            type: "ERROR",
+            message: "Invalid message format",
           });
         }
       });
 
       // Handle client disconnect
-      ws.on('close', (code, reason) => {
-        this.clients.delete(ws);
-        console.log(`❌ WebSocket client disconnected: ${clientId} (Code: ${code}, Reason: ${reason})`);
+      ws.on("close", (code, reason) => {
+        this.handleClientDisconnect(ws);
+        console.log(
+          `❌ WebSocket client disconnected: ${clientId} (Code: ${code})`,
+        );
         console.log(`   Total clients: ${this.clients.size}`);
       });
 
       // Handle errors
-      ws.on('error', (error) => {
+      ws.on("error", (error) => {
         console.error(`WebSocket error for client ${clientId}:`, error.message);
-        this.clients.delete(ws);
+        this.handleClientDisconnect(ws);
       });
 
-      // Auto-ping every 30s to keep connection alive
+      // Heartbeat - ping every 30s
+      ws.isAlive = true;
+      ws.on("pong", () => {
+        ws.isAlive = true;
+      });
+
       const pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'PING' }));
-        } else {
+        if (!ws.isAlive) {
           clearInterval(pingInterval);
+          return ws.terminate();
+        }
+        ws.isAlive = false;
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.ping();
         }
       }, 30000);
 
-      ws.on('close', () => clearInterval(pingInterval));
+      ws.on("close", () => clearInterval(pingInterval));
     });
 
-    console.log('');
-    console.log('╔════════════════════════════════════════════╗');
-    console.log('║     ✅ WebSocket Server Initialized       ║');
-    console.log('╚════════════════════════════════════════════╝');
-    console.log('');
+    console.log("");
+    console.log("╔════════════════════════════════════════════╗");
+    console.log("║   ✅ WebSocket Server Initialized         ║");
+    console.log("║   📡 Real-time Offer Push: ENABLED        ║");
+    console.log("╚════════════════════════════════════════════╝");
+    console.log("");
 
     return this.wss;
   }
@@ -82,38 +100,113 @@ class WebSocketManager {
    * Handle client messages
    */
   handleClientMessage(ws, data) {
-    console.log(`📨 Message from ${ws.clientId}: ${data.type}`);
+    const { type, payload } = data;
+    console.log(`📨 Message from ${ws.clientId}: ${type}`);
 
-    switch (data.type) {
-      case 'PING':
-        this.sendToClient(ws, {
-          type: 'PONG',
-          timestamp: new Date().toISOString()
-        });
+    switch (type) {
+      case "ping":
+      case "PING":
+        this.sendToClient(ws, { type: "pong" });
         break;
 
-      case 'SUBSCRIBE':
+      case "subscribe:offers":
+        // Subscribe to offers for a specific PNR
+        if (payload && payload.pnr) {
+          this.subscribeToPNR(ws, payload.pnr);
+        }
+        break;
+
+      case "unsubscribe:offers":
+        // Unsubscribe from offers for a specific PNR
+        if (payload && payload.pnr) {
+          this.unsubscribeFromPNR(ws, payload.pnr);
+        }
+        break;
+
+      case "SUBSCRIBE":
         ws.subscribed = true;
         this.sendToClient(ws, {
-          type: 'SUBSCRIBED',
-          message: 'Successfully subscribed to updates'
+          type: "SUBSCRIBED",
+          message: "Successfully subscribed to updates",
         });
         break;
 
-      case 'UNSUBSCRIBE':
+      case "UNSUBSCRIBE":
         ws.subscribed = false;
         this.sendToClient(ws, {
-          type: 'UNSUBSCRIBED',
-          message: 'Successfully unsubscribed from updates'
+          type: "UNSUBSCRIBED",
+          message: "Successfully unsubscribed from updates",
         });
         break;
 
       default:
-        this.sendToClient(ws, {
-          type: 'UNKNOWN_MESSAGE',
-          message: `Unknown message type: ${data.type}`
-        });
+        console.log(`⚠️ Unknown message type: ${type}`);
     }
+  }
+
+  /**
+   * Subscribe a client to PNR-specific updates
+   */
+  subscribeToPNR(ws, pnr) {
+    // Add to client's subscribed PNRs
+    ws.subscribedPNRs.add(pnr);
+
+    // Add to global PNR subscriptions map
+    if (!this.pnrSubscriptions.has(pnr)) {
+      this.pnrSubscriptions.set(pnr, new Set());
+    }
+    this.pnrSubscriptions.get(pnr).add(ws);
+
+    console.log(`✅ Client ${ws.clientId} subscribed to PNR: ${pnr}`);
+    console.log(
+      `   Total subscriptions for ${pnr}: ${this.pnrSubscriptions.get(pnr).size}`,
+    );
+
+    // Send confirmation
+    this.sendToClient(ws, {
+      type: "subscribed",
+      payload: { pnr, message: `Subscribed to offers for PNR ${pnr}` },
+    });
+  }
+
+  /**
+   * Unsubscribe a client from PNR-specific updates
+   */
+  unsubscribeFromPNR(ws, pnr) {
+    ws.subscribedPNRs.delete(pnr);
+
+    const subscribers = this.pnrSubscriptions.get(pnr);
+    if (subscribers) {
+      subscribers.delete(ws);
+      if (subscribers.size === 0) {
+        this.pnrSubscriptions.delete(pnr);
+      }
+    }
+
+    console.log(`❌ Client ${ws.clientId} unsubscribed from PNR: ${pnr}`);
+
+    this.sendToClient(ws, {
+      type: "unsubscribed",
+      payload: { pnr, message: `Unsubscribed from offers for PNR ${pnr}` },
+    });
+  }
+
+  /**
+   * Handle client disconnect - cleanup subscriptions
+   */
+  handleClientDisconnect(ws) {
+    this.clients.delete(ws);
+
+    // Remove from all PNR subscriptions
+    ws.subscribedPNRs.forEach((pnr) => {
+      const subscribers = this.pnrSubscriptions.get(pnr);
+      if (subscribers) {
+        subscribers.delete(ws);
+        if (subscribers.size === 0) {
+          this.pnrSubscriptions.delete(pnr);
+        }
+      }
+    });
   }
 
   /**
@@ -121,22 +214,158 @@ class WebSocketManager {
    */
   sendToClient(ws, data) {
     if (ws.readyState === WebSocket.OPEN) {
-      const message = JSON.stringify({ ...data, timestamp: new Date().toISOString() });
-      ws.send(message);
+      try {
+        const message = JSON.stringify({
+          ...data,
+          timestamp: data.timestamp || new Date().toISOString(),
+        });
+        ws.send(message);
+        return true;
+      } catch (error) {
+        console.error(`Failed to send to client ${ws.clientId}:`, error);
+        return false;
+      }
     }
+    return false;
   }
 
   /**
-   * Broadcast to all connected clients (subscribed only)
+   * Send upgrade offer to specific PNR (REAL-TIME PUSH)
+   */
+  sendOfferToPassenger(pnr, offer) {
+    const subscribers = this.pnrSubscriptions.get(pnr);
+
+    if (!subscribers || subscribers.size === 0) {
+      console.log(`⚠️ No active subscribers for PNR: ${pnr}`);
+      return false;
+    }
+
+    let sentCount = 0;
+    subscribers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        const sent = this.sendToClient(ws, {
+          type: "upgrade:offer",
+          payload: offer,
+        });
+        if (sent) sentCount++;
+      }
+    });
+
+    console.log(`✅ Sent offer to PNR ${pnr}: ${sentCount} client(s) notified`);
+    console.log(
+      `   Offer: ${offer.fromBerth || "RAC"} → ${offer.toBerth} (${offer.coach})`,
+    );
+
+    return sentCount > 0;
+  }
+
+  /**
+   * Notify offer expired
+   */
+  notifyOfferExpired(pnr, notificationId) {
+    const subscribers = this.pnrSubscriptions.get(pnr);
+    if (!subscribers) return false;
+
+    let sentCount = 0;
+    subscribers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        const sent = this.sendToClient(ws, {
+          type: "upgrade:expired",
+          payload: { notificationId, pnr },
+        });
+        if (sent) sentCount++;
+      }
+    });
+
+    console.log(
+      `⏰ Notified ${sentCount} client(s) - Offer expired for PNR ${pnr}`,
+    );
+    return sentCount > 0;
+  }
+
+  /**
+   * Notify upgrade confirmed by TTE
+   */
+  notifyUpgradeConfirmed(pnr, upgradeData) {
+    const subscribers = this.pnrSubscriptions.get(pnr);
+    if (!subscribers) return false;
+
+    let sentCount = 0;
+    subscribers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        const sent = this.sendToClient(ws, {
+          type: "upgrade:confirmed",
+          payload: { pnr, ...upgradeData },
+        });
+        if (sent) sentCount++;
+      }
+    });
+
+    console.log(
+      `✅ Notified ${sentCount} client(s) - Upgrade confirmed for PNR ${pnr}`,
+    );
+    return sentCount > 0;
+  }
+
+  /**
+   * Notify upgrade rejected by TTE
+   */
+  notifyUpgradeRejected(pnr, reason) {
+    const subscribers = this.pnrSubscriptions.get(pnr);
+    if (!subscribers) return false;
+
+    let sentCount = 0;
+    subscribers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        const sent = this.sendToClient(ws, {
+          type: "upgrade:rejected",
+          payload: { pnr, reason },
+        });
+        if (sent) sentCount++;
+      }
+    });
+
+    console.log(
+      `❌ Notified ${sentCount} client(s) - Upgrade rejected for PNR ${pnr}`,
+    );
+    return sentCount > 0;
+  }
+
+  /**
+   * Notify boarding status change
+   */
+  notifyBoardingStatus(pnr, status) {
+    const subscribers = this.pnrSubscriptions.get(pnr);
+    if (!subscribers) return false;
+
+    let sentCount = 0;
+    subscribers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        const sent = this.sendToClient(ws, {
+          type: "passenger:boarding_status",
+          payload: { pnr, boarded: status },
+        });
+        if (sent) sentCount++;
+      }
+    });
+
+    console.log(
+      `📍 Notified ${sentCount} client(s) - Boarding status for PNR ${pnr}: ${status}`,
+    );
+    return sentCount > 0;
+  }
+
+  /**
+   * Broadcast to all connected clients
    */
   broadcast(dataObj) {
     const message = JSON.stringify({
       ...dataObj,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     let sentCount = 0;
 
-    this.clients.forEach(client => {
+    this.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN && client.subscribed !== false) {
         try {
           client.send(message);
@@ -147,17 +376,20 @@ class WebSocketManager {
       }
     });
 
-    console.log(`📡 Broadcast "${dataObj.type}" to ${sentCount}/${this.clients.size} clients`);
+    console.log(
+      `📡 Broadcast "${dataObj.type}" to ${sentCount}/${this.clients.size} clients`,
+    );
+    return sentCount;
   }
 
   /**
    * Broadcast train update
    */
   broadcastTrainUpdate(eventType, data) {
-    this.broadcast({
-      type: 'TRAIN_UPDATE',
+    return this.broadcast({
+      type: "TRAIN_UPDATE",
       eventType: eventType,
-      data: data
+      data: data,
     });
   }
 
@@ -165,9 +397,9 @@ class WebSocketManager {
    * Broadcast station arrival
    */
   broadcastStationArrival(stationData) {
-    this.broadcast({
-      type: 'STATION_ARRIVAL',
-      data: stationData
+    return this.broadcast({
+      type: "STATION_ARRIVAL",
+      data: stationData,
     });
   }
 
@@ -175,9 +407,9 @@ class WebSocketManager {
    * Broadcast RAC reallocation
    */
   broadcastRACReallocation(reallocationData) {
-    this.broadcast({
-      type: 'RAC_REALLOCATION',
-      data: reallocationData
+    return this.broadcast({
+      type: "RAC_REALLOCATION",
+      data: reallocationData,
     });
   }
 
@@ -185,9 +417,9 @@ class WebSocketManager {
    * Broadcast no-show event
    */
   broadcastNoShow(passengerData) {
-    this.broadcast({
-      type: 'NO_SHOW',
-      data: passengerData
+    return this.broadcast({
+      type: "NO_SHOW",
+      data: passengerData,
     });
   }
 
@@ -195,9 +427,9 @@ class WebSocketManager {
    * Broadcast statistics update
    */
   broadcastStatsUpdate(stats) {
-    this.broadcast({
-      type: 'STATS_UPDATE',
-      data: { stats }
+    return this.broadcast({
+      type: "STATS_UPDATE",
+      data: { stats },
     });
   }
 
@@ -216,21 +448,39 @@ class WebSocketManager {
   }
 
   /**
+   * Get subscription stats
+   */
+  getSubscriptionStats() {
+    return {
+      totalClients: this.clients.size,
+      totalPNRSubscriptions: this.pnrSubscriptions.size,
+      subscriptionDetails: Array.from(this.pnrSubscriptions.entries()).map(
+        ([pnr, clients]) => ({
+          pnr,
+          subscribers: clients.size,
+        }),
+      ),
+    };
+  }
+
+  /**
    * Close all connections
    */
   closeAll() {
-    this.clients.forEach(client => {
+    this.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.close(1000, 'Server shutdown');
+        client.close(1000, "Server shutdown");
       }
     });
     this.clients.clear();
+    this.pnrSubscriptions.clear();
     if (this.wss) {
       this.wss.close();
     }
-    console.log('🔌 All WebSocket connections closed');
+    console.log("🔌 All WebSocket connections closed");
   }
 }
 
+// Export singleton instance
 const wsManagerInstance = new WebSocketManager();
 module.exports = wsManagerInstance;

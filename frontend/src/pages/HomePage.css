@@ -602,3 +602,61 @@
     font-size: 10px;
   }
 }
+
+/* Disabled State for Navigation Cards and Stat Boxes */
+.nav-card.disabled,
+.stat-box.disabled,
+.action-card-compact.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+  border-color: #bdc3c7;
+}
+
+.nav-card.disabled:hover,
+.stat-box.disabled:hover,
+.action-card-compact.disabled:hover {
+  transform: none;
+  box-shadow: 0 2px 6px rgba(44, 62, 80, 0.08);
+  background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+  border-color: #bdc3c7;
+}
+
+/* Lock Icons */
+.lock-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.lock-icon-small {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.lock-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #7f8c8d;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Position relative for parent elements */
+.nav-card,
+.stat-box,
+.action-card-compact {
+  position: relative;
+}

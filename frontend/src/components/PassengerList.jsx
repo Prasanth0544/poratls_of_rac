@@ -22,9 +22,12 @@ function PassengerList({ currentStationIdx, stations }) {
         ]);
 
         const berthPassengers = passengersRes?.data?.passengers || [];
+        console.log('📊 Berth passengers:', berthPassengers.length);
+
         let racPassengers = [];
 
         if (racRes?.success) {
+          console.log('🔍 Raw RAC Response:', racRes.data?.queue?.[0]); // Inspect first item
           racPassengers = (racRes.data?.queue || [])
             .filter((r) => r.pnrStatus === "RAC")
             .map((r) => ({
@@ -37,7 +40,7 @@ function PassengerList({ currentStationIdx, stations }) {
               fromIdx: r.fromIdx,
               toIdx: r.toIdx,
               class: r.class,
-              pnrStatus: r.pnrStatus || "CNF",
+              pnrStatus: "RAC", // Ensure uppercase
               racStatus: r.racStatus,
               berth: r.seatNo ? `${r.coach || "RAC"}-${r.seatNo}` : "RAC",
               berthType: r.berthType || "RAC",
@@ -48,8 +51,27 @@ function PassengerList({ currentStationIdx, stations }) {
             }));
         }
 
-        setPassengers([...berthPassengers, ...racPassengers]);
+        console.log('📊 RAC passengers from queue:', racPassengers.length);
+
+        // Deduplicate passengers by PNR
+        const uniquePassengers = new Map();
+
+        // Add berth passengers first
+        berthPassengers.forEach(p => {
+          if (p.pnr) uniquePassengers.set(p.pnr, p);
+        });
+
+        // Add/Overwrite with RAC queue passengers (they might have more specific RAC info)
+        racPassengers.forEach(p => {
+          if (p.pnr) uniquePassengers.set(p.pnr, p);
+        });
+
+        const allPassengers = Array.from(uniquePassengers.values());
+        console.log('📊 Total unique passengers:', allPassengers.length);
+
+        setPassengers(allPassengers);
       } catch (err) {
+        console.error('Error fetching passengers:', err);
         setPassengers([]);
       }
     };
@@ -59,6 +81,13 @@ function PassengerList({ currentStationIdx, stations }) {
 
   // Filter + sort passengers
   const filteredAndSortedPassengers = useMemo(() => {
+    console.log('🔄 Filtering... Status:', filterStatus, 'Class:', filterClass);
+    console.log('📊 Total Passengers in State:', passengers.length);
+    if (passengers.length > 0) {
+      const sampleRAC = passengers.find(p => p.pnrStatus === 'RAC');
+      console.log('🔍 Sample RAC Passenger:', sampleRAC);
+    }
+
     let result = [...passengers];
 
     if (searchPNR.trim()) {
@@ -79,7 +108,9 @@ function PassengerList({ currentStationIdx, stations }) {
           case "cnf":
             return p.pnrStatus === "CNF";
           case "rac":
-            return p.pnrStatus === "RAC";
+            const isRac = (p.pnrStatus && p.pnrStatus.toUpperCase() === "RAC") || (p.racStatus && p.racStatus !== '-');
+            // console.log(`Checking RAC: ${p.pnr} -> ${isRac} (Status: ${p.pnrStatus}, RAC Status: ${p.racStatus})`);
+            return isRac;
           default:
             return true;
         }
@@ -89,6 +120,8 @@ function PassengerList({ currentStationIdx, stations }) {
     if (filterClass !== "all") {
       result = result.filter((p) => p.class === filterClass);
     }
+
+    console.log('✅ Filtered Result Count:', result.length);
 
     result.sort((a, b) => {
       const compareA = String(a[sortBy] ?? "");
@@ -164,6 +197,23 @@ function PassengerList({ currentStationIdx, stations }) {
     setCurrentPage(1);
   };
 
+  const handleStatClick = (key) => {
+    // Map stat keys to filter values
+    const map = {
+      total: 'all',
+      boarded: 'boarded',
+      noShow: 'no-show',
+      notBoarded: 'not-boarded',
+      upcoming: 'upcoming',
+      cnf: 'cnf',
+      rac: 'rac'
+    };
+    if (map[key]) {
+      setFilterStatus(map[key]);
+      setCurrentPage(1);
+    }
+  };
+
   return (
     <div className="passenger-list-panel">
       <div className="panel-header">
@@ -176,7 +226,12 @@ function PassengerList({ currentStationIdx, stations }) {
       {/* Stats */}
       <div className="stats-grid">
         {Object.entries(stats).map(([key, val]) => (
-          <div key={key} className={`stat-card ${key}`}>
+          <div
+            key={key}
+            className={`stat-card ${key} ${filterStatus === (key === 'total' ? 'all' : key.replace(/([A-Z])/g, "-$1").toLowerCase()) ? 'active' : ''}`}
+            onClick={() => handleStatClick(key)}
+            style={{ cursor: 'pointer' }}
+          >
             <div className="stat-value">{val}</div>
             <div className="stat-label">{key.replace(/([A-Z])/g, " $1")}</div>
           </div>

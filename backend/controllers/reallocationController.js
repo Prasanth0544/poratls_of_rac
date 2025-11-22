@@ -19,10 +19,19 @@ class ReallocationController {
     try {
       const { pnr } = req.body;
 
+      // Validation: PNR is required
       if (!pnr) {
         return res.status(400).json({
           success: false,
           message: "PNR is required"
+        });
+      }
+
+      // Validation: PNR format (basic check)
+      if (typeof pnr !== 'string' || pnr.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid PNR format. PNR must be 10 characters."
         });
       }
 
@@ -43,7 +52,49 @@ class ReallocationController {
         });
       }
 
+      // CRITICAL FIX: Get passenger location BEFORE marking no-show
+      // because markNoShow removes the passenger from the berth
+      const location = trainState.findPassenger(pnr);
+      let vacantBerthInfo = null;
+
+      if (location) {
+        vacantBerthInfo = {
+          berth: location.berth,
+          coachNo: location.coachNo,
+          berthNo: location.berth.berthNo,
+          fullBerthNo: location.berth.fullBerthNo,
+          type: location.berth.type,
+          class: location.coach?.class || 'SL',
+          coachName: location.coach?.coach_name || location.coachNo
+        };
+      }
+
       const result = await ReallocationService.markNoShow(trainState, pnr);
+
+      // Process vacancy for upgrade offers if berth info was captured
+      if (vacantBerthInfo) {
+        const currentStation = trainState.getCurrentStation();
+
+        // Trigger offer creation for eligible RAC passengers
+        try {
+          const offerResult = await ReallocationService.processVacancyForUpgrade(
+            trainState,
+            vacantBerthInfo,
+            currentStation
+          );
+
+          if (offerResult.error) {
+            console.warn(`⚠️  Vacancy processing had errors: ${offerResult.error}`);
+          } else if (offerResult.offersCreated > 0) {
+            console.log(`✅ Created ${offerResult.offersCreated} upgrade offer(s)`);
+          }
+        } catch (vacancyError) {
+          // Log but don't fail the no-show operation
+          console.error('❌ Error processing vacancy for upgrades:', vacancyError);
+        }
+      } else {
+        console.warn('⚠️  Could not capture berth info for vacancy processing');
+      }
 
       // Broadcast no-show event
       if (wsManager) {
