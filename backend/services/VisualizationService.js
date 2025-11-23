@@ -7,7 +7,7 @@ class VisualizationService {
   generateSegmentMatrixData(trainState) {
     const segments = trainState.segmentMatrix.segments;
     const matrix = [];
-    
+
     trainState.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         const row = {
@@ -16,24 +16,25 @@ class VisualizationService {
           type: berth.type,
           segments: []
         };
-        
+
         segments.forEach((seg, idx) => {
-          const pnr = berth.segmentOccupancy[idx];
-          const passenger = pnr ? berth.passengers.find(p => p.pnr === pnr) : null;
-          
+          const pnrs = berth.segmentOccupancy[idx] || [];
+          const pnr = pnrs.length > 0 ? pnrs.join(', ') : null; // Join multiple PNRs with comma
+          const passenger = pnrs.length > 0 ? berth.passengers.find(p => p.pnr === pnrs[0]) : null;
+
           row.segments.push({
             segmentId: idx,
             segmentName: seg.name,
-            occupied: pnr !== null,
+            occupied: pnrs.length > 0,
             pnr: pnr,
             passengerName: passenger ? passenger.name : null
           });
         });
-        
+
         matrix.push(row);
       });
     });
-    
+
     return {
       stations: trainState.stations.map(s => ({ // FIXED: Full mapping – sends all fields for table rows/summary (your original shallow map caused 0/empty)
         sno: s.sno, // # column
@@ -61,7 +62,7 @@ class VisualizationService {
   generateGraphData(trainState) {
     const nodes = [];
     const edges = [];
-    
+
     trainState.stations.forEach((station, idx) => {
       nodes.push({
         id: `station-${idx}`,
@@ -69,7 +70,7 @@ class VisualizationService {
         type: 'station',
         data: station
       });
-      
+
       if (idx < trainState.stations.length - 1) {
         edges.push({
           id: `segment-${idx}`,
@@ -83,24 +84,25 @@ class VisualizationService {
         });
       }
     });
-    
+
     return { nodes, edges };
   }
 
   /**
-   * Get vacant berths count for a segment (YOUR ORIGINAL 100% PRESERVED)
+   * Get vacant berths count for a segment
    */
   getVacantBerthsForSegment(trainState, segmentId) {
     let count = 0;
-    
+
     trainState.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
-        if (berth.segmentOccupancy[segmentId] === null) {
+        const occupants = berth.segmentOccupancy[segmentId] || [];
+        if (occupants.length === 0) {
           count++;
         }
       });
     });
-    
+
     return count;
   }
 
@@ -109,13 +111,13 @@ class VisualizationService {
    */
   generateHeatmapData(trainState) {
     const heatmap = [];
-    
+
     trainState.coaches.forEach(coach => {
       const coachHeatmap = {
         coach: coach.coachNo,
         data: []
       };
-      
+
       coach.berths.forEach(berth => {
         const occupancyPercentage = this.calculateOccupancyPercentage(berth);
         coachHeatmap.data.push({
@@ -124,19 +126,19 @@ class VisualizationService {
           color: this.getHeatmapColor(occupancyPercentage)
         });
       });
-      
+
       heatmap.push(coachHeatmap);
     });
-    
+
     return heatmap;
   }
 
   /**
-   * Calculate occupancy percentage for a berth (YOUR ORIGINAL 100% PRESERVED)
+   * Calculate occupancy percentage for a berth
    */
   calculateOccupancyPercentage(berth) {
     const totalSegments = berth.segmentOccupancy.length;
-    const occupiedSegments = berth.segmentOccupancy.filter(s => s !== null).length;
+    const occupiedSegments = berth.segmentOccupancy.filter(s => s && s.length > 0).length;
     return (occupiedSegments / totalSegments) * 100;
   }
 

@@ -50,6 +50,11 @@ router.get('/train/stats',
   (req, res) => trainController.getTrainStats(req, res)
 );
 
+router.get('/train/allocation-errors',
+  validationMiddleware.checkTrainInitialized,
+  (req, res) => trainController.getAllocationErrors(req, res)
+);
+
 // ========== REALLOCATION ROUTES ==========
 router.post('/passenger/no-show',
   validationMiddleware.sanitizeBody,

@@ -361,6 +361,35 @@ class TrainController {
   }
 
   /**
+   * Get allocation errors for diagnostics
+   */
+  getAllocationErrors(req, res) {
+    try {
+      if (!trainState) {
+        return res.status(400).json({
+          success: false,
+          message: "Train not initialized"
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          stats: trainState.allocationStats || { total: 0, success: 0, failed: 0 },
+          errors: trainState.allocationErrors || []
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error getting allocation errors:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Get global train state (for other controllers)
    */
   getGlobalTrainState() {

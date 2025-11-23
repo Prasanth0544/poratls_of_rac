@@ -10,6 +10,7 @@ import PassengersPage from './pages/PassengersPage';
 import ReallocationPage from './pages/ReallocationPage';
 import VisualizationPage from './pages/VisualizationPage';
 import AddPassengerPage from './pages/AddPassengerPage'; // NEW: Import AddPassengerPage
+import AllocationDiagnosticsPage from './pages/AllocationDiagnosticsPage';
 import PhaseOnePage from './pages/PhaseOnePage';
 import ConfigPage from './pages/ConfigPage';
 import './App.css';
@@ -101,10 +102,10 @@ function App() {
         loadTrainState();
         break;
       case 'JOURNEY_COMPLETE':
-        alert('🎉 Journey Complete!\n\n' + 
-              `Final Station: ${data.data.finalStation}\n` +
-              `Total Deboarded: ${data.data.totalDeboarded}\n` +
-              `RAC Upgraded: ${data.data.totalRACUpgraded}`);
+        alert('🎉 Journey Complete!\n\n' +
+          `Final Station: ${data.data.finalStation}\n` +
+          `Total Deboarded: ${data.data.totalDeboarded}\n` +
+          `RAC Upgraded: ${data.data.totalRACUpgraded}`);
         break;
       default:
         break;
@@ -116,7 +117,7 @@ function App() {
       setLoading(true);
       setError(null);
       const response = await initializeTrain();
-      
+
       if (response.success) {
         await loadTrainState();
       }
@@ -140,7 +141,7 @@ function App() {
   const loadTrainState = async () => {
     try {
       const response = await getTrainState();
-      
+
       if (response.success) {
         setTrainData(response.data);
         setJourneyStarted(response.data.journeyStarted);
@@ -154,9 +155,9 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await startJourney();
-      
+
       if (response.success) {
         setJourneyStarted(true);
         await loadTrainState();
@@ -172,19 +173,19 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await moveToNextStation();
-      
+
       if (response.success) {
         await loadTrainState();
-        
+
         alert(`✅ Processed Station: ${response.data.station}\n\n` +
-              `Deboarded: ${response.data.deboarded}\n` +
-              `No-Shows: ${response.data.noShows}\n` +
-              `RAC Upgraded: ${response.data.racAllocated}\n` +
-              `Boarded: ${response.data.boarded}\n\n` +
-              `Current Onboard: ${response.data.stats.currentOnboard}\n` +
-              `Vacant Berths: ${response.data.stats.vacantBerths}`);
+          `Deboarded: ${response.data.deboarded}\n` +
+          `No-Shows: ${response.data.noShows}\n` +
+          `RAC Upgraded: ${response.data.racAllocated}\n` +
+          `Boarded: ${response.data.boarded}\n\n` +
+          `Current Onboard: ${response.data.stats.currentOnboard}\n` +
+          `Vacant Berths: ${response.data.stats.vacantBerths}`);
       } else {
         alert(response.message);
       }
@@ -203,9 +204,9 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await resetTrain();
-      
+
       if (response.success) {
         setJourneyStarted(false);
         await loadTrainState();
@@ -222,9 +223,9 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await markPassengerNoShow(pnr);
-      
+
       if (response.success) {
         await loadTrainState();
         alert(`✅ ${response.data.name} marked as NO-SHOW\n\nBerth: ${response.data.berth}\nFrom: ${response.data.from} → ${response.data.to}`);
@@ -386,6 +387,12 @@ function App() {
 
         {currentPage === 'phase1' && (
           <PhaseOnePage
+            onClose={handleClosePage}
+          />
+        )}
+
+        {currentPage === 'diagnostics' && (
+          <AllocationDiagnosticsPage
             onClose={handleClosePage}
           />
         )}

@@ -5,7 +5,6 @@ import {
   getAllPassengers,
   getPassengerCounts,
   searchPassenger,
-  getRACQueue,
   setPassengerStatus,
 } from "../services/api";
 import "./PassengersPage.css";
@@ -111,7 +110,8 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
         // Check if berth is vacant at current station
         if (
           berth.segmentOccupancy &&
-          berth.segmentOccupancy[currentIdx] === null
+          berth.segmentOccupancy[currentIdx] &&
+          berth.segmentOccupancy[currentIdx].length === 0
         ) {
           // Find the station where it becomes vacant (last occupied segment before current)
           let vacantFromIdx = currentIdx;
@@ -195,38 +195,15 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     try {
       setLoading(true);
 
-      const [passengersRes, countsRes, racRes] = await Promise.all([
+      const [passengersRes, countsRes] = await Promise.all([
         getAllPassengers(),
         getPassengerCounts(),
-        getRACQueue(),
       ]);
 
       if (passengersRes.success) {
-        const berthPassengers = passengersRes.data.passengers || [];
-        let racPassengers = [];
-        if (racRes?.success) {
-          racPassengers = (racRes.data.queue || [])
-            .filter((r) => r.pnrStatus === "RAC")
-            .map((r) => ({
-              pnr: r.pnr,
-              name: r.name,
-              age: r.age,
-              gender: r.gender,
-              from: r.from,
-              to: r.to,
-              fromIdx: r.fromIdx,
-              toIdx: r.toIdx,
-              pnrStatus: r.pnrStatus,
-              racStatus: r.racStatus,
-              class: r.class,
-              coach: r.coach,
-              berth: r.seatNo ? `${r.coach}-${r.seatNo}` : "RAC",
-              berthType: r.berthType,
-              boarded: false,
-              noShow: false,
-            }));
-        }
-        setPassengers([...berthPassengers, ...racPassengers]);
+        // getAllPassengers() already includes both berth passengers AND RAC queue
+        const allPassengers = passengersRes.data.passengers || [];
+        setPassengers(allPassengers);
       }
 
       if (countsRes.success) {

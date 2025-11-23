@@ -84,12 +84,50 @@ class DataService {
       console.log(`   ✅ Allocated: ${allocated.success}`);
       if (allocated.failed > 0) {
         console.warn(`   ⚠️  Failed: ${allocated.failed}`);
+
+        // Group errors by type for better debugging
+        const errorsByType = {};
+        allocated.errors.forEach(err => {
+          const errorType = err.error.includes('Berth full') ? 'Berth Full' :
+            err.error.includes('Station not found') ? 'Station Not Found' :
+              err.error.includes('Berth not found') ? 'Berth Not Found' :
+                'Other';
+          if (!errorsByType[errorType]) errorsByType[errorType] = [];
+          errorsByType[errorType].push(err);
+        });
+
+        console.warn(`\n   📊 Allocation Failure Summary:`);
+        Object.entries(errorsByType).forEach(([type, errors]) => {
+          console.warn(`      ${type}: ${errors.length} passengers`);
+          if (type === 'Berth Full' && errors.length > 0) {
+            // Show which berths are over-allocated
+            const berthCounts = {};
+            errors.forEach(err => {
+              berthCounts[err.berth] = (berthCounts[err.berth] || 0) + 1;
+            });
+            console.warn(`      Over-allocated berths:`);
+            Object.entries(berthCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
+              .forEach(([berth, count]) => {
+                console.warn(`         ${berth}: ${count} excess passengers`);
+              });
+          }
+        });
       }
 
       // Build RAC queue
       console.log(`\n🎯 Building RAC queue...`);
       this.buildRACQueue(trainState, passengers);
       console.log(`   ✅ RAC queue: ${trainState.racQueue.length}`);
+
+      // Store allocation errors for diagnostic page
+      trainState.allocationErrors = allocated.errors || [];
+      trainState.allocationStats = {
+        total: passengers.length,
+        success: allocated.success,
+        failed: allocated.failed
+      };
 
       // Update statistics
       trainState.stats.totalPassengers = passengers.length;
@@ -197,11 +235,6 @@ class DataService {
 
     passengers.forEach((p) => {
       try {
-        // Skip RAC passengers - they should only be in the RAC queue, not allocated to berths
-        if (p.PNR_Status === "RAC") {
-          return;
-        }
-
         // Find station indices
         const fromStation = this.findStation(
           trainState.stations,
@@ -214,6 +247,12 @@ class DataService {
 
         if (!fromStation || !toStation) {
           failed++;
+          errors.push({
+            pnr: p.PNR_Number,
+            name: p.Name,
+            berth: `${p.Assigned_Coach}-${p.Assigned_berth}`,
+            error: `Station not found: ${!fromStation ? p.Boarding_Station : p.Deboarding_Station}`
+          });
           return;
         }
 
@@ -222,6 +261,28 @@ class DataService {
 
         if (!berth) {
           failed++;
+          errors.push({
+            pnr: p.PNR_Number,
+            name: p.Name,
+            berth: `${p.Assigned_Coach}-${p.Assigned_berth}`,
+            error: `Berth not found: ${p.Assigned_Coach}-${p.Assigned_berth}`
+          });
+          return;
+        }
+
+        // Check if berth is available for this segment
+        if (!berth.isAvailableForSegment(fromStation.idx, toStation.idx)) {
+          failed++;
+          errors.push({
+            pnr: p.PNR_Number,
+            name: p.Name,
+            status: p.PNR_Status,
+            berth: `${p.Assigned_Coach}-${p.Assigned_berth}`,
+            berthType: berth.type,
+            from: p.Boarding_Station,
+            to: p.Deboarding_Station,
+            error: `Berth full or unavailable (max ${berth.type === "Side Lower" ? "2" : "1"} passengers)`
+          });
           return;
         }
 
@@ -250,7 +311,7 @@ class DataService {
         success++;
       } catch (error) {
         failed++;
-        errors.push({ pnr: p.PNR_Number, error: error.message });
+        errors.push({ pnr: p.PNR_Number, name: p.Name, error: error.message });
       }
     });
 
@@ -302,21 +363,67 @@ class DataService {
         };
       })
       .sort((a, b) => a.racNumber - b.racNumber);
-
     trainState.racQueue = racPassengers;
   }
 
   /**
-   * Find station by code or name
-   */
+ * Find station by code or name with flexible matching
+ * Handles variations like "Narasaraopet" vs "Narasaraopet Jn"
+ */
   findStation(stations, stationStr) {
-    return stations.find(
+    // Defensive: Handle missing/invalid inputs
+    if (!stations || !Array.isArray(stations) || stations.length === 0) {
+      console.warn('⚠️ findStation: Invalid stations array');
+      return null;
+    }
+
+    if (!stationStr || typeof stationStr !== 'string') {
+      console.warn('⚠️ findStation: Invalid search string');
+      return null;
+    }
+
+    // First try exact match
+    let station = stations.find(
+      (s) =>
+        s.code === stationStr ||
+        s.name === stationStr
+    );
+
+    if (station) return station;
+
+    // Try includes match (for partial matches)
+    station = stations.find(
       (s) =>
         stationStr.includes(s.code) ||
-        stationStr.includes(s.name) ||
-        s.code === stationStr ||
-        s.name === stationStr,
+        stationStr.includes(s.name)
     );
+
+    if (station) return station;
+
+    // Fuzzy match: normalize and compare without common suffixes
+    const normalize = (str) => {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .replace(/\s*\([a-z0-9]+\)\s*/gi, '')  // Remove station codes in parentheses like (NR), (TGL)
+        .replace(/\s+(jn|junction|station|halt|town|city|road)$/i, '')  // Remove suffixes
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .trim();
+    };
+
+    const normalizedSearch = normalize(stationStr);
+
+    station = stations.find((s) => {
+      const normalizedCode = normalize(s.code);
+      const normalizedName = normalize(s.name);
+
+      return normalizedCode === normalizedSearch ||
+        normalizedName === normalizedSearch ||
+        normalizedSearch.includes(normalizedCode) ||
+        normalizedSearch.includes(normalizedName);
+    });
+
+    return station || null;  // Always return null instead of undefined
   }
 
   /**

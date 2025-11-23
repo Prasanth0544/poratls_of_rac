@@ -237,6 +237,11 @@ function HomePage({
             <span className="nav-icon">⚙️</span>
             <span className="nav-text">Update Config</span>
           </div>
+
+          <div className="nav-card" onClick={() => onNavigate('diagnostics')}>
+            <span className="nav-icon">🔍</span>
+            <span className="nav-text">Allocation Diagnostics</span>
+          </div>
         </div>
       </div>
     </div>

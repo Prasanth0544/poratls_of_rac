@@ -8,9 +8,9 @@ class Berth {
     this.type = type;
     this.status = 'VACANT'; // VACANT, OCCUPIED, SHARED
 
-    // Segment-based occupancy
+    // Segment-based occupancy - Array of PNR arrays to support RAC sharing
     this.totalSegments = totalSegments;
-    this.segmentOccupancy = new Array(totalSegments).fill(null);
+    this.segmentOccupancy = new Array(totalSegments).fill(null).map(() => []);
 
     // Passengers list
     this.passengers = [];
@@ -20,25 +20,25 @@ class Berth {
    * Add passenger to berth with segment occupancy
    */
   addPassenger(passenger) {
+    // Defensive: Capture ALL fields from passenger object, provide safe defaults
     this.passengers.push({
-      pnr: passenger.pnr,
-      name: passenger.name,
-      age: passenger.age,
-      gender: passenger.gender,
-      fromIdx: passenger.fromIdx,
-      toIdx: passenger.toIdx,
-      from: passenger.from,
-      to: passenger.to,
-      pnrStatus: passenger.pnrStatus,
-      class: passenger.class,
+      ...passenger,  // Spread all fields - future-proof against new fields
+      // Ensure critical fields have defaults if missing
+      pnr: passenger.pnr || 'UNKNOWN',
+      name: passenger.name || 'Unknown Passenger',
+      racStatus: passenger.racStatus || '-',
+      passengerStatus: passenger.passengerStatus || 'Offline',
+      berthType: passenger.berthType || 'Unknown',
       noShow: passenger.noShow || false,
       boarded: passenger.boarded || false
     });
 
-    // Mark segments as occupied
+    // Mark segments as occupied - Add PNR to array
     if (!passenger.noShow) {
       for (let i = passenger.fromIdx; i < passenger.toIdx; i++) {
-        this.segmentOccupancy[i] = passenger.pnr;
+        if (!this.segmentOccupancy[i].includes(passenger.pnr)) {
+          this.segmentOccupancy[i].push(passenger.pnr);
+        }
       }
     }
 
@@ -52,10 +52,11 @@ class Berth {
     const passenger = this.passengers.find(p => p.pnr === pnr);
 
     if (passenger) {
-      // Clear segment occupancy
+      // Clear segment occupancy - Remove PNR from array
       for (let i = 0; i < this.segmentOccupancy.length; i++) {
-        if (this.segmentOccupancy[i] === pnr) {
-          this.segmentOccupancy[i] = null;
+        const index = this.segmentOccupancy[i].indexOf(pnr);
+        if (index > -1) {
+          this.segmentOccupancy[i].splice(index, 1);
         }
       }
 
@@ -86,10 +87,14 @@ class Berth {
 
   /**
    * Check if berth is available for given journey segment
+   * Side Lower berths (RAC) can have up to 2 passengers
    */
   isAvailableForSegment(fromIdx, toIdx) {
+    const isRACBerth = this.type === "Side Lower";
+    const maxAllowed = isRACBerth ? 2 : 1;
+
     for (let i = fromIdx; i < toIdx; i++) {
-      if (this.segmentOccupancy[i] !== null) {
+      if (this.segmentOccupancy[i].length >= maxAllowed) {
         return false;
       }
     }
@@ -113,7 +118,7 @@ class Berth {
   getVacantSegments() {
     const vacant = [];
     for (let i = 0; i < this.segmentOccupancy.length; i++) {
-      if (this.segmentOccupancy[i] === null) {
+      if (this.segmentOccupancy[i].length === 0) {
         vacant.push(i);
       }
     }
@@ -131,7 +136,7 @@ class Berth {
    * Check if berth is vacant at specific station
    */
   isVacantAtStation(stationIdx) {
-    return this.segmentOccupancy[stationIdx] === null;
+    return this.segmentOccupancy[stationIdx].length === 0;
   }
 
   /**

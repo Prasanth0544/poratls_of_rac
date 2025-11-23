@@ -23,15 +23,58 @@ class StationOrder {
   }
 
   /**
-   * Find station by search string
-   */
+ * Find station by search string with flexible matching
+ */
   static findStation(stations, searchStr) {
-    return stations.find(s => 
+    // Defensive: Handle missing/invalid inputs
+    if (!stations || !Array.isArray(stations) || stations.length === 0) {
+      console.warn('⚠️ StationOrder.findStation: Invalid stations array');
+      return null;
+    }
+
+    if (!searchStr || typeof searchStr !== 'string') {
+      console.warn('⚠️ StationOrder.findStation: Invalid search string');
+      return null;
+    }
+
+    // First try exact match
+    let station = stations.find(s =>
       s.code === searchStr ||
-      s.name === searchStr ||
+      s.name === searchStr
+    );
+
+    if (station) return station;
+
+    // Try includes match
+    station = stations.find(s =>
       searchStr.includes(s.code) ||
       searchStr.includes(s.name)
     );
+
+    if (station) return station;
+
+    // Fuzzy match: normalize and compare
+    const normalize = (str) => {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .replace(/\s*\([a-z0-9]+\)\s*/gi, '')  // Remove station codes like (NR), (TGL)
+        .replace(/\s+(jn|junction|station|halt|town|city|road)$/i, '')  // Remove suffixes
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const normalizedSearch = normalize(searchStr);
+
+    return stations.find(s => {
+      const normalizedCode = normalize(s.code);
+      const normalizedName = normalize(s.name);
+
+      return normalizedCode === normalizedSearch ||
+        normalizedName === normalizedSearch ||
+        normalizedSearch.includes(normalizedCode) ||
+        normalizedSearch.includes(normalizedName);
+    }) || null;  // Always return null instead of undefined
   }
 
   /**
@@ -97,11 +140,11 @@ class StationOrder {
   static getJourneyDescription(stations, fromIdx, toIdx) {
     const fromStation = this.getStationByIndex(stations, fromIdx);
     const toStation = this.getStationByIndex(stations, toIdx);
-    
+
     if (!fromStation || !toStation) {
       return 'Invalid journey';
     }
-    
+
     const distance = this.calculateDistance(fromIdx, toIdx);
     return `${fromStation.code} → ${toStation.code} (${distance} segments)`;
   }

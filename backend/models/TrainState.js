@@ -185,15 +185,17 @@ class TrainState {
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         // Count berth status at CURRENT station using segment occupancy
-        if (berth.segmentOccupancy && berth.segmentOccupancy[currentIdx] === null) {
-          vacant++;
-        } else if (berth.segmentOccupancy && berth.segmentOccupancy[currentIdx] !== null) {
-          occupied++;
+        const passengersAtCurrentSegment = berth.segmentOccupancy[currentIdx] || [];
+
+        if (passengersAtCurrentSegment.length === 0) {
+          vacant++;  // Berth is vacant
+        } else {
+          occupied++;  // Berth is occupied (counts as 1 even if 2 RAC passengers share it)
         }
 
         // Count boarded passengers (actual people, not berths)
         const boardedPassengers = berth.getBoardedPassengers();
-        totalOnboard += boardedPassengers.length;
+        totalOnboard += boardedPassengers.length;  // Counts 2 if 2 RAC passengers are boarded
       });
     });
 

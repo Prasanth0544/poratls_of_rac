@@ -28,18 +28,27 @@ function CoachesPage({ trainData, onClose }) {
   const getBerthStatusClass = (berth) => {
     if (!trainData.journeyStarted) return "vacant";
 
-    const segments = berth.segmentOccupancy || berth.segments;
     const currentStationIdx = trainData.currentStationIdx || 0;
 
-    if (segments && Array.isArray(segments) && segments.length > currentStationIdx) {
-      const currentSegment = segments[currentStationIdx];
-      if (currentSegment === null || currentSegment === undefined) return "vacant";
-      if (berth.status === "SHARED") return "shared";
-      return "occupied";
-    }
+    // Check for passengers who are:
+    // 1. Currently on this berth segment (fromIdx <= currentIdx < toIdx)
+    // 2. Actually boarded (boarded === true)
+    // 3. Not marked as no-show
+    const currentlyOnBerth = berth.passengers.filter(p =>
+      p.fromIdx <= currentStationIdx &&
+      p.toIdx > currentStationIdx &&
+      p.boarded &&
+      !p.noShow
+    );
 
-    if (berth.status === "VACANT") return "vacant";
-    if (berth.status === "SHARED") return "shared";
+    // No boarded passengers → VACANT
+    if (currentlyOnBerth.length === 0) return "vacant";
+
+    // Check if 2 RAC passengers are sharing
+    const racPassengers = currentlyOnBerth.filter(p => p.pnrStatus === "RAC");
+    if (racPassengers.length === 2) return "shared";  // 2 RAC sharing
+
+    // Otherwise OCCUPIED (either CNF or single RAC)
     return "occupied";
   };
 
@@ -50,7 +59,7 @@ function CoachesPage({ trainData, onClose }) {
   return (
     <div className="coaches-page">
       <div className="page-header">
-        <button className="back-btn" onClick={onClose} title="Go Back">
+        <button className="back-btn" onClick={onClose}>
           ◄
         </button>
         <h2>🚂 Train Coaches & Berths</h2>

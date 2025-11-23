@@ -419,7 +419,8 @@ class ReallocationService {
     let rangeStart = null;
 
     for (let i = 0; i < berth.segmentOccupancy.length; i++) {
-      if (berth.segmentOccupancy[i] === null) {
+      const occupants = berth.segmentOccupancy[i] || [];
+      if (occupants.length === 0) {
         // Vacant segment
         if (rangeStart === null) {
           rangeStart = i;

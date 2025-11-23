@@ -390,24 +390,15 @@ class PassengerController {
 
   // Helper method to check berth availability
   checkBerthAvailability(berth, fromIdx, toIdx) {
-    // Check segmentOccupancy first (modern approach)
+    const isRACBerth = berth.type === "Side Lower";
+    const maxAllowed = isRACBerth ? 2 : 1;
+
+    // Check segmentOccupancy first (modern approach with arrays)
     if (berth.segmentOccupancy && Array.isArray(berth.segmentOccupancy)) {
       for (let i = fromIdx; i < toIdx; i++) {
-        if (
-          berth.segmentOccupancy[i] !== null &&
-          berth.segmentOccupancy[i] !== undefined
-        ) {
-          return false; // Segment is occupied
-        }
-      }
-      return true;
-    }
-
-    // Fallback to legacy segments
-    if (berth.segments && Array.isArray(berth.segments)) {
-      for (let i = fromIdx; i < toIdx; i++) {
-        if (berth.segments[i].status !== "vacant") {
-          return false;
+        const occupants = berth.segmentOccupancy[i] || [];
+        if (occupants.length >= maxAllowed) {
+          return false; // Segment is fully occupied
         }
       }
       return true;
