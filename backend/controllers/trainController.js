@@ -347,13 +347,22 @@ class TrainController {
   async list(req, res) {
     try {
       const col = db.getTrainDetailsCollection();
-      const docs = await col.find({}).project({ Train_No: 1, Train_Name: 1, Sleeper_Coaches_Count: 1, Three_TierAC_Coaches_Count: 1 }).sort({ Train_No: 1 }).toArray();
-      const items = docs.map(d => ({
-        trainNo: d.Train_No,
-        trainName: d.Train_Name,
-        sleeperCount: d.Sleeper_Coaches_Count,
-        threeAcCount: d.Three_TierAC_Coaches_Count
-      }));
+      // Fetch full documents to handle unpredictable field names (e.g. trailing spaces)
+      const docs = await col.find({}).sort({ Train_No: 1 }).toArray();
+
+      const items = docs.map(d => {
+        // Robustly find the station collection name key (ignoring spaces)
+        const stationKey = Object.keys(d).find(k => k.trim() === 'Station_Collection_Name');
+        const stationCollectionName = stationKey ? d[stationKey] : null;
+
+        return {
+          trainNo: d.Train_No,
+          trainName: d.Train_Name,
+          sleeperCount: d.Sleeper_Coaches_Count,
+          threeAcCount: d.Three_TierAC_Coaches_Count,
+          stationCollectionName: stationCollectionName
+        };
+      });
       res.json({ success: true, data: items });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

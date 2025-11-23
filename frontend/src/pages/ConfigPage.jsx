@@ -35,10 +35,26 @@ function ConfigPage({ onClose, loadTrainState }) {
     setError(null);
 
     try {
+      // Fallback: Try to find station collection if missing
+      let stationsCollection = form.stationsCollection;
+      if (!stationsCollection && form.trainNo) {
+        const item = trainList.find((t) => String(t.trainNo) === form.trainNo);
+        if (item && item.stationCollectionName) {
+          stationsCollection = item.stationCollectionName;
+          update("stationsCollection", stationsCollection); // Sync state
+        }
+      }
+
+      if (!stationsCollection) {
+        throw new Error(
+          `Could not auto-detect Station Collection for train ${form.trainNo}. Please ensure "Station_Collection_Name" is set in "Trains_Details" collection.`
+        );
+      }
+
       const payload = {
         mongoUri: form.mongoUri,
         stationsDb: form.stationsDb,
-        stationsCollection: form.stationsCollection,
+        stationsCollection: stationsCollection, // Use resolved value
         passengersDb: form.passengersDb,
         passengersCollection: form.passengersCollection,
         trainNo: form.trainNo,
@@ -105,22 +121,7 @@ function ConfigPage({ onClose, loadTrainState }) {
           </label>
         </div>
 
-        <div className="form-section">
-          <h3>Stations (Database: {form.stationsDb})</h3>
-          <label>
-            Collection Name
-            <input
-              type="text"
-              value={form.stationsCollection}
-              onChange={(e) => update("stationsCollection", e.target.value)}
-              placeholder="e.g., 17225"
-              required
-            />
-            <span className="field-hint">
-              Enter the stations collection name
-            </span>
-          </label>
-        </div>
+        {/* Stations collection is now auto-populated from Trains_Details */}
 
         <div className="form-section">
           <h3>Passengers (Database: {form.passengersDb})</h3>
@@ -150,7 +151,13 @@ function ConfigPage({ onClose, loadTrainState }) {
                   const no = e.target.value;
                   const item = trainList.find((t) => String(t.trainNo) === no);
                   update("trainNo", no);
-                  if (item) update("trainName", item.trainName || "");
+                  if (item) {
+                    update("trainName", item.trainName || "");
+                    // Auto-populate stations collection from Train_Details
+                    if (item.stationCollectionName) {
+                      update("stationsCollection", item.stationCollectionName);
+                    }
+                  }
                 }}
               >
                 <option value="">-- Select --</option>
@@ -162,7 +169,7 @@ function ConfigPage({ onClose, loadTrainState }) {
                 ))}
               </select>
               <span className="field-hint">
-                Train metadata from rac.Trains_Details
+                Train metadata from rac.Trains_Details (includes Station_Collection_Name)
               </span>
             </label>
           )}
@@ -171,7 +178,17 @@ function ConfigPage({ onClose, loadTrainState }) {
             <input
               type="text"
               value={form.trainNo}
-              onChange={(e) => update("trainNo", e.target.value)}
+              onChange={(e) => {
+                const no = e.target.value;
+                const item = trainList.find((t) => String(t.trainNo) === no);
+                update("trainNo", no);
+                if (item) {
+                  update("trainName", item.trainName || "");
+                  if (item.stationCollectionName) {
+                    update("stationsCollection", item.stationCollectionName);
+                  }
+                }
+              }}
               placeholder="e.g., 17225"
               maxLength={5}
               required

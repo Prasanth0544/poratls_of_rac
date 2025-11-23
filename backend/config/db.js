@@ -34,9 +34,27 @@ class Database {
       const finalConfig = config || global.RAC_CONFIG || {};
 
       // Validate required config
-      if (!finalConfig.mongoUri || !finalConfig.stationsDb || !finalConfig.passengersDb || 
-          !finalConfig.stationsCollection || !finalConfig.passengersCollection) {
-        throw new Error('Database configuration missing. Please submit configuration via /api/config/setup from the frontend.');
+      if (!finalConfig.mongoUri || !finalConfig.stationsDb || !finalConfig.passengersDb ||
+        !finalConfig.stationsCollection || !finalConfig.passengersCollection) {
+
+        console.warn('⚠️ Partial config. Initializing Trains_Details only for bootstrapping...');
+
+        // Default to localhost/rac/Trains_Details if not provided
+        this.mongoUri = finalConfig.mongoUri || "mongodb://localhost:27017";
+        this.trainDetailsDbName = finalConfig.trainDetailsDb || "rac";
+        this.trainDetailsCollectionName = finalConfig.trainDetailsCollection || "Trains_Details";
+
+        // Close existing client if any
+        if (stationsClient) await stationsClient.close();
+
+        stationsClient = new MongoClient(this.mongoUri);
+        await stationsClient.connect();
+
+        this.trainDetailsDb = stationsClient.db(this.trainDetailsDbName);
+        this.trainDetailsCollection = this.trainDetailsDb.collection(this.trainDetailsCollectionName);
+
+        console.log('✅ Connected to Trains_Details (Bootstrap Mode)');
+        return this;
       }
 
       this.config = finalConfig;
@@ -52,12 +70,12 @@ class Database {
       // Create MongoDB clients
       stationsClient = new MongoClient(this.mongoUri);
       passengersClient = new MongoClient(this.mongoUri);
-      
+
       // Connect to stations database
       await stationsClient.connect();
       this.stationsDb = stationsClient.db(this.stationsDbName);
       this.stationsCollection = this.stationsDb.collection(this.stationsCollectionName);
-      
+
       console.log('');
       console.log('╔════════════════════════════════════════════╗');
       console.log('║     ✅ MongoDB Connected (Stations)       ║');
@@ -70,14 +88,14 @@ class Database {
       await passengersClient.connect();
       this.passengersDb = passengersClient.db(this.passengersDbName);
       this.passengersCollection = this.passengersDb.collection(this.passengersCollectionName);
-      
+
       console.log('╔════════════════════════════════════════════╗');
       console.log('║   ✅ MongoDB Connected (Passengers)       ║');
       console.log('╚════════════════════════════════════════════╝');
       console.log(`📦 Database: ${this.passengersDbName}`);
       console.log(`📁 Collection: ${this.passengersCollectionName}`);
       console.log('');
-      
+
       // Initialize Train Details collection (can be in same or different DB)
       this.trainDetailsDb = stationsClient.db(this.trainDetailsDbName);
       this.trainDetailsCollection = this.trainDetailsDb.collection(this.trainDetailsCollectionName);
@@ -100,17 +118,17 @@ class Database {
    */
   switchTrain(trainNo, stationsCollectionName = null, passengersCollectionName = null) {
     this.currentTrainNo = trainNo;
-    
+
     if (!stationsCollectionName || !passengersCollectionName) {
       throw new Error('Collection names are required when switching trains.');
     }
-    
+
     this.stationsCollectionName = stationsCollectionName;
     this.passengersCollectionName = passengersCollectionName;
-    
+
     this.stationsCollection = this.stationsDb.collection(stationsCollectionName);
     this.passengersCollection = this.passengersDb.collection(passengersCollectionName);
-    
+
     console.log(`\n🔄 Switched to train ${trainNo}`);
     console.log(`📁 Stations: ${stationsCollectionName}`);
     console.log(`📁 Passengers: ${passengersCollectionName}\n`);
