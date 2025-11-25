@@ -1,47 +1,84 @@
- Implementation Flow - Step by Step
+# Implementation Flow - Step by Step
 Based on your current state and specifications, here's the exact order to follow:
 
-📍 Phase 1: Foundation (Week 1) - START HERE
-Step 1: Backend Authentication (2-3 days)
-Why First? Everything else needs auth to work properly.
+---
 
-1.1 Install Dependencies
-bash
+## 📍 Phase 1: Foundation (Week 1) - IN PROGRESS
+
+### ✅ **Preparation (COMPLETED)**
+- [x] IRCTC_ID field added to backend (DataService, PassengerService, Berth)
+- [x] Database collections created:
+  - `tte_users` (Admin + TTE)
+  - `passenger_accounts` (Passengers with IRCTC_ID)
+- [x] npm packages installed: `jsonwebtoken`, `bcrypt`
+- [x] All specification documents created
+
+---
+
+### **Step 1: Backend Authentication (2-3 days)** ⚠️ CURRENT
+**Why First?** Everything else needs auth to work properly.
+
+#### **1.1 Install Dependencies** ✅ DONE
+```bash
 cd backend
 npm install jsonwebtoken bcrypt
-1.2 Create Auth Files
+```
+
+#### **1.2 Create Auth Files** ⏳ NEXT
+```
 backend/
 ├── controllers/
 │   └── authController.js        # NEW - Login logic
 ├── middleware/
 │   └── auth.js                  # NEW - JWT verification
 └── models/
-    └── User.js                  # NEW - User model (optional)
-1.3 Implementation Order:
-Create authController.js with login methods
-Create auth.js middleware for JWT verification
-Add login routes to 
-api.js
-Test with Postman/Insomnia
-Reference: 
-dot_md_files/AUTHENTICATION_SPECIFICATION.md
+    └── User.js                  # OPTIONAL - User model
+```
 
-Step 2: Frontend Login Pages (2-3 days)
-2.1 Admin Portal
+#### **1.3 Implementation Order:**
+1. Create `authController.js` with login methods
+2. Create `auth.js` middleware for JWT verification
+3. Add login routes to `api.js`
+4. Test with Postman/Insomnia
+
+**Reference:** `dot_md_files/AUTHENTICATION_SPECIFICATION.md`
+
+---
+
+### **Step 2: Frontend Login Pages (2-3 days)**
+
+#### **2.1 Admin Portal**
+```
 frontend/src/pages/
 └── LoginPage.jsx               # NEW
-2.2 TTE Portal
+```
+
+#### **2.2 TTE Portal**
+```
 tte-portal/src/pages/
 └── LoginPage.jsx               # NEW
-2.3 Passenger Portal
+```
+
+#### **2.3 Passenger Portal**
+```
 passenger-portal/src/pages/
 └── LoginPage.jsx               # NEW
-2.4 What to Build:
-Simple login form (email/username + password)
-Store JWT in localStorage
-Redirect to dashboard on success
-Protected routes (redirect to login if no token)
-📍 Phase 2: Core Features (Week 2)
+```
+
+#### **2.4 What to Build:**
+- Simple login form (IRCTC_ID or email + password for passengers, employeeId for TTE/Admin)
+- Store JWT in localStorage
+- Redirect to dashboard on success
+- Protected routes (redirect to login if no token)
+
+**Login Credentials:**
+- **Admin:** `employeeId: ADMIN_01`, password: `Prasanth@123`
+- **TTE:** `employeeId: TTE_01`, password: `Prasanth@123`
+- **Passenger:** `irctcId: IR_8001` (or `email`), password: `Prasanth@123`
+
+---
+
+## 📍 Phase 2: Core Features (Week 2)
 Step 3: TTE Boarding Verification (3-4 days)
 Why This? Critical for accurate passenger tracking.
 
@@ -140,15 +177,17 @@ Test TTE login
 Test passenger login
 Test protected routes
 Test token expiry
-✅ Validation Checklist
+## ✅ Validation Checklist
 Before moving to Phase 2, ensure:
 
- Admin can login and see dashboard
- TTE can login and see their portal
- Passenger can login with PNR
- JWT token is validated on each request
- Logout works correctly
- Invalid credentials show error
+- [ ] Admin can login and see dashboard
+- [ ] TTE can login and see their portal
+- [ ] Passenger can login with IRCTC_ID (IR_8001) or email
+- [ ] JWT token is validated on each request
+- [ ] Logout works correctly
+- [ ] Invalid credentials show error
+
+---
 📊 Visual Flow
 TODAY
   ↓

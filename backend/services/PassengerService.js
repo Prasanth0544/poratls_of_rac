@@ -123,6 +123,7 @@ class PassengerService {
 
         return {
             pnr: passenger.PNR_Number,
+            irctcId: passenger.IRCTC_ID || null,  // ✅ ADDED
             name: passenger.Name,
             age: passenger.Age,
             gender: passenger.Gender,

@@ -289,6 +289,7 @@ class DataService {
         // Add passenger to berth
         berth.addPassenger({
           pnr: p.PNR_Number,
+          irctcId: p.IRCTC_ID || null, // ✅ ADD THIS
           name: p.Name,
           age: p.Age,
           gender: p.Gender,
@@ -342,6 +343,7 @@ class DataService {
 
         return {
           pnr: p.PNR_Number,
+          irctcId: p.IRCTC_ID || null, // ✅ ADD THIS
           name: p.Name,
           age: p.Age,
           gender: p.Gender,

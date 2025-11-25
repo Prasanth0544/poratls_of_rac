@@ -8,11 +8,49 @@ import PeopleIcon from '@mui/icons-material/People';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 // Pages/Components
-import Dashboard from './components/Dashboard';
-import PassengerManagement from './components/PassengerManagement';
-import OfflineUpgradeVerification from './components/OfflineUpgradeVerification';
-import useTteSocket from './hooks/useTteSocket';
 import './App.css';
+
+// Temporary Placeholder Components (until features are implemented)
+function Dashboard() {
+    return (
+        <Box sx={{ textAlign: 'center', mt: 8 }}>
+            <Typography variant="h4" gutterBottom>TTE Dashboard</Typography>
+            <Typography variant="body1" color="text.secondary">
+                Dashboard functionality will be available after authentication is implemented.
+            </Typography>
+        </Box>
+    );
+}
+
+function PassengerManagement() {
+    return (
+        <Box sx={{ textAlign: 'center', mt: 8 }}>
+            <Typography variant="h4" gutterBottom>Passenger Management</Typography>
+            <Typography variant="body1" color="text.secondary">
+                Passenger management features coming soon...
+            </Typography>
+        </Box>
+    );
+}
+
+function OfflineUpgradeVerification() {
+    return (
+        <Box sx={{ textAlign: 'center', mt: 8 }}>
+            <Typography variant="h4" gutterBottom>Offline Upgrade Verification</Typography>
+            <Typography variant="body1" color="text.secondary">
+                This feature will be replaced by new boarding verification workflow.
+            </Typography>
+        </Box>
+    );
+}
+
+// Placeholder hook
+function useTteSocket() {
+    return {
+        isConnected: false,
+        pendingUpgrades: []
+    };
+}
 
 const theme = createTheme({
     palette: {

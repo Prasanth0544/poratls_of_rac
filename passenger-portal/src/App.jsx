@@ -8,9 +8,30 @@ import SearchIcon from '@mui/icons-material/Search';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 
 // Pages
-import PNRCheckPage from './pages/PNRCheckPage';
-import UpgradeNotificationsPage from './pages/UpgradeNotificationsPage';
 import './App.css';
+
+// Temporary Home Component (until login is implemented)
+function HomePage() {
+    return (
+        <Box sx={{ textAlign: 'center', mt: 8 }}>
+            <Typography variant="h3" gutterBottom>
+                Welcome to Passenger Portal
+            </Typography>
+            <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
+                Login functionality coming soon...
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+                After authentication is implemented, you'll be able to:
+            </Typography>
+            <Box sx={{ mt: 2, textAlign: 'left', maxWidth: 600, mx: 'auto' }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>✓ View your tickets (using IRCTC ID)</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>✓ Check RAC upgrade status</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>✓ Receive real-time notifications</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>✓ View boarding pass & journey details</Typography>
+            </Box>
+        </Box>
+    );
+}
 
 const theme = createTheme({
     palette: {
@@ -41,19 +62,15 @@ function App() {
                             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                                 Indian Railways - Passenger Portal
                             </Typography>
-                            <Button color="inherit" component={Link} to="/" startIcon={<SearchIcon />}>
-                                PNR Check
-                            </Button>
-                            <Button color="inherit" component={Link} to="/upgrades" startIcon={<NotificationsIcon />}>
-                                Upgrades
+                            <Button color="inherit" component={Link} to="/">
+                                Home
                             </Button>
                         </Toolbar>
                     </AppBar>
 
                     <Container maxWidth="lg" sx={{ flex: 1, py: 4 }}>
                         <Routes>
-                            <Route path="/" element={<PNRCheckPage />} />
-                            <Route path="/upgrades" element={<UpgradeNotificationsPage />} />
+                            <Route path="/" element={<HomePage />} />
                         </Routes>
                     </Container>
 
