@@ -26,7 +26,9 @@ function HomePage({
     setPnrInput('');
   };
 
-  const isLastStation = trainData.currentStationIdx >= trainData.stations.length - 1;
+  const currentStationIdx = trainData.currentStationIdx || 0;
+  const stations = trainData.stations || [];
+  const isLastStation = stations.length > 0 && currentStationIdx >= stations.length - 1;
 
   return (
     <div className="home-page">
@@ -43,7 +45,7 @@ function HomePage({
         <div className="config-item">
           <span className="config-label">Route:</span>
           <span className="config-value">
-            {trainData.stations[0]?.name} → {trainData.stations[trainData.stations.length - 1]?.name}
+            {stations.length > 0 ? `${stations[0]?.name} → ${stations[stations.length - 1]?.name}` : 'Loading route...'}
           </span>
         </div>
       </div>
@@ -53,20 +55,20 @@ function HomePage({
         <h2>🚉 Train Simulation - Journey Progress</h2>
 
         <div className="timeline-container">
-          <div className="timeline-scroll">
-            {trainData.stations.map((station, idx) => (
-              <div key={station.code} className="timeline-station">
-                {/* Connecting Line (before station, except first) */}
-                {idx > 0 && (
-                  <div className={`timeline-line ${idx <= trainData.currentStationIdx ? 'completed' : 'upcoming'
-                    }`}></div>
-                )}
+        <div className="timeline-scroll">
+          {stations.map((station, idx) => (
+            <div key={station.code} className="timeline-station">
+              {/* Connecting Line (before station, except first) */}
+              {idx > 0 && (
+                <div className={`timeline-line ${idx <= currentStationIdx ? 'completed' : 'upcoming'
+                  }`}></div>
+              )}
 
-                {/* Station Circle */}
-                <div className={`timeline-circle ${idx < trainData.currentStationIdx ? 'completed' :
-                  idx === trainData.currentStationIdx ? 'current' : 'upcoming'
-                  }`}>
-                  {idx < trainData.currentStationIdx ? '✓' : station.sno}
+              {/* Station Circle */}
+              <div className={`timeline-circle ${idx < currentStationIdx ? 'completed' :
+                idx === currentStationIdx ? 'current' : 'upcoming'
+                }`}>
+                  {idx < currentStationIdx ? '✓' : station.sno}
                 </div>
 
                 {/* Station Info */}
@@ -166,12 +168,12 @@ function HomePage({
           {/* Stat Cards */}
           <div className="stat-box">
             <div className="stat-label">Total Passengers</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.totalPassengers : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.totalPassengers : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Confirmed (CNF)</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.cnfPassengers : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.cnfPassengers : '-'}</div>
           </div>
 
           <div
@@ -179,27 +181,27 @@ function HomePage({
             onClick={() => onNavigate('rac-queue')}
           >
             <div className="stat-label">RAC Queue</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.racPassengers : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.racPassengers : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Currently Onboard</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.currentOnboard : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.currentOnboard : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Vacant Berths</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.vacantBerths : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.vacantBerths : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Occupied Berths</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.occupiedBerths : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.occupiedBerths : '-'}</div>
           </div>
 
           <div className="stat-box">
             <div className="stat-label">Total Deboarded</div>
-            <div className="stat-value">{journeyStarted ? trainData.stats.totalDeboarded : '-'}</div>
+            <div className="stat-value">{journeyStarted && trainData?.stats ? trainData.stats.totalDeboarded : '-'}</div>
           </div>
 
           {/* Add Passenger Card - MOVED HERE */}

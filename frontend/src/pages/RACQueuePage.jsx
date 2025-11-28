@@ -1,7 +1,7 @@
 // frontend/src/pages/RACQueuePage.jsx
 
 import React, { useState, useEffect } from "react";
-import { getRACQueue } from "../services/api";
+import { getRACQueue } from "../services/apiWithErrorHandling";
 import "./RACQueuePage.css";
 
 

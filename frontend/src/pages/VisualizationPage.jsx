@@ -1,7 +1,7 @@
 // frontend/src/pages/VisualizationPage.jsx - FIXED CONNECTION (YOUR CODE + API CALL CORRECTION)
 
 import React, { useState, useEffect } from "react";
-import { getStationSchedule } from "../services/api"; // Use getStationSchedule from api.js (calls /station-schedule)
+import { getStationSchedule } from "../services/apiWithErrorHandling"; // Use getStationSchedule from apiWithErrorHandling
 import "./VisualizationPage.css";
 
 function VisualizationPage({ trainData, onClose }) {

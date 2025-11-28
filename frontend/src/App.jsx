@@ -164,13 +164,16 @@ function App() {
     try {
       const response = await api.getTrainState();
 
-      if (response.success) {
+      if (response && response.success) {
+        // response.data contains the train state object
         setTrainData(response.data);
-        if (typeof response.data.journeyStarted !== 'undefined') {
+        if (typeof response.data?.journeyStarted !== 'undefined') {
           setJourneyStarted(prev => prev || response.data.journeyStarted);
         }
-      } else {
+      } else if (response && response.error) {
         setError(response.error);
+      } else if (response && !response.success) {
+        setError(response.message || 'Failed to load train state');
       }
     } catch (err) {
       setError(err.message || 'Failed to load train state');
@@ -387,10 +390,18 @@ function App() {
       <div className="app-header">
         <div className="header-content">
           <h1>🚂 RAC Reallocation System</h1>
-          <h2>{trainData.trainName} (#{trainData.trainNo}) | {trainData.journeyDate}</h2>
-          <p className="route">
-            {trainData?.stations[0]?.name} → {trainData?.stations[trainData.stations.length - 1]?.name}
-          </p>
+          {trainData && trainData.trainNo ? (
+            <>
+              <h2>{trainData.trainName || 'Unknown'} (#{trainData.trainNo}) | {trainData.journeyDate || 'N/A'}</h2>
+              <p className="route">
+                {trainData?.stations && trainData.stations.length > 0 
+                  ? `${trainData.stations[0]?.name || 'Start'} → ${trainData.stations[trainData.stations.length - 1]?.name || 'End'}`
+                  : 'Loading stations...'}
+              </p>
+            </>
+          ) : (
+            <h2>Loading train configuration...</h2>
+          )}
         </div>
         <div className="header-actions">
           <APIDocumentationLink />
@@ -493,7 +504,7 @@ function App() {
       </div>
 
       <div className="app-footer">
-        <p>&copy; 2025 RAC Reallocation System | Train {trainData?.trainNo} - {trainData?.trainName} | Journey: {trainData?.journeyDate}</p>
+        <p>&copy; 2025 RAC Reallocation System | Train {trainData?.trainNo || 'N/A'} - {trainData?.trainName || 'Unknown'} | Journey: {trainData?.journeyDate || 'N/A'}</p>
       </div>
     </div>
   );

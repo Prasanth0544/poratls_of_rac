@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import api from '../services/api';
+import * as api from '../services/apiWithErrorHandling';
 import './ReallocationPage.css';
 
 const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
@@ -26,8 +26,8 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
 
     const fetchTrainState = async () => {
         try {
-            const res = await api.get('/train/state');
-            setTrainState(res.data.data);
+            const res = await api.getTrainState();
+            setTrainState(res.data);
         } catch (error) {
             console.error('Error fetching train state:', error);
             toast.error('Failed to load train state');
@@ -36,8 +36,8 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
 
     const fetchEligibilityMatrix = async () => {
         try {
-            const res = await api.get('/reallocation/eligibility');
-            const matrixData = res.data.data?.eligibility || res.data.data;
+            const res = await api.getEligibilityMatrix();
+            const matrixData = res.data?.eligibility || res.data;
             setEligibilityMatrix(Array.isArray(matrixData) ? matrixData : []);
         } catch (error) {
             console.error('Error fetching eligibility matrix:', error);
@@ -65,7 +65,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
         try {
             if (isOnline) {
                 // Send upgrade offer to online passenger
-                const res = await api.post('/reallocation/send-offer', {
+                const res = await api.sendUpgradeOffer({
                     pnr: candidate.pnr,
                     berthDetails: {
                         coach: matrixItem.coach,
@@ -74,7 +74,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                     }
                 });
 
-                if (res.data.success) {
+                if (res.success) {
                     toast.success(
                         `📤 Upgrade offer sent to ${candidate.name}! Waiting for acceptance...`,
                         { duration: 4000, icon: '🔔' }
@@ -87,7 +87,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                 }
             } else {
                 // Add to offline upgrades queue for TTE
-                const res = await api.post('/tte/offline-upgrades/add', {
+                const res = await api.addOfflineUpgrade({
                     pnr: candidate.pnr,
                     berthDetails: {
                         coach: matrixItem.coach,
@@ -96,7 +96,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                     }
                 });
 
-                if (res.data.success) {
+                if (res.success) {
                     toast.info(
                         `📋 ${candidate.name} added to TTE offline upgrades. TTE confirmation required.`,
                         { duration: 4000, icon: 'ℹ️' }
@@ -108,7 +108,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                 }
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to send upgrade offer');
+            toast.error(error.message || 'Failed to send upgrade offer');
         } finally {
             setApplying(null);
         }

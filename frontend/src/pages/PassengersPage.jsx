@@ -5,7 +5,8 @@ import {
   getAllPassengers,
   getPassengerCounts,
   setPassengerStatus,
-} from "../services/api";
+  getVacantBerths,
+} from "../services/apiWithErrorHandling";
 import "./PassengersPage.css";
 
 // Passenger Status Button Component
@@ -101,16 +102,17 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
       return;
     }
 
+    const currentStationIdx = trainData.currentStationIdx || 0;
+
     try {
-      // Fetch vacant berths from backend API
-      const response = await fetch('http://localhost:5000/api/train/vacant-berths');
-      const data = await response.json();
+      // Use API wrapper with error handling
+      const response = await getVacantBerths();
 
-      console.log('🔍 Vacant Berths API Response (ALL segments):', data);
+      console.log('🔍 Vacant Berths API Response (ALL segments):', response);
 
-      if (data.success && data.data && data.data.vacancies) {
+      if (response.success && response.data && response.data.vacancies) {
         // Backend now returns ALL vacant segments with fromStation and toStation
-        const vacant = data.data.vacancies.map(berth => {
+        const vacant = response.data.vacancies.map(berth => {
           console.log('📦 Berth segment:', berth.fullBerthNo,
             `${berth.vacantFromStation} → ${berth.vacantToStation} `,
             'willOccupyAt:', berth.willOccupyAt);
@@ -121,8 +123,8 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             fullBerthNo: berth.fullBerthNo,
             type: berth.type,
             class: berth.class,
-            currentStation: trainData.stations[trainData.currentStationIdx]?.name || "N/A",
-            currentStationCode: trainData.stations[trainData.currentStationIdx]?.code || "",
+            currentStation: (trainData?.stations && trainData.stations[currentStationIdx]) ? trainData.stations[currentStationIdx]?.name : "N/A",
+            currentStationCode: (trainData?.stations && trainData.stations[currentStationIdx]) ? trainData.stations[currentStationIdx]?.code : "",
             vacantFromStation: berth.vacantFromStation,  // Station NAME
             vacantToStation: berth.vacantToStation,      // Station NAME
             willOccupyAt: berth.willOccupyAt,           // Station NAME
@@ -247,7 +249,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
       case "upcoming":
         filtered = filtered.filter(
           (p) =>
-            p.fromIdx > trainData.currentStationIdx && !p.noShow && !p.boarded,
+            p.fromIdx > (trainData?.currentStationIdx || 0) && !p.noShow && !p.boarded,
         );
         break;
       default:
@@ -425,7 +427,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             {!showVacantBerths && (
               <span className="toggle-count">
                 ({vacantBerths.length} vacant at{" "}
-                {trainData.stations[trainData.currentStationIdx]?.code})
+                {trainData?.stations && trainData.stations[(trainData.currentStationIdx || 0)] ? trainData.stations[(trainData.currentStationIdx || 0)]?.code : "N/A"})
               </span>
             )}
           </button>

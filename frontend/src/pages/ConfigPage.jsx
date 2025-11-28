@@ -1,6 +1,6 @@
 // frontend/src/pages/ConfigPage.jsx
 import React, { useState, useEffect } from "react";
-import { setupConfig, initializeTrain, getTrains } from "../services/api";
+import { setupConfig, initializeTrain, getTrains } from "../services/apiWithErrorHandling";
 import "./ConfigPage.css";
 
 function ConfigPage({ onClose, loadTrainState }) {
@@ -69,7 +69,13 @@ function ConfigPage({ onClose, loadTrainState }) {
       if (!init.success)
         throw new Error(init.message || "Initialization failed");
 
+      // Wait a moment for backend to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       await loadTrainState();
+      
+      // Wait for parent component to update state
+      await new Promise(resolve => setTimeout(resolve, 300));
       onClose();
     } catch (err) {
       // Surface server-provided message when available

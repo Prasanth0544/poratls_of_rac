@@ -58,9 +58,6 @@ router.post('/passenger/revert-no-show',
   (req, res) => passengerController.selfRevertNoShow(req, res)
 );
 
-
-
-
 // Get eligibility matrix
 router.get('/reallocation/eligibility',
   authMiddleware,

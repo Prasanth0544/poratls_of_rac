@@ -140,11 +140,9 @@ const safeRequest = async (requestFn, options = {}) => {
 
   try {
     const response = await requestFn();
-    return {
-      success: true,
-      data: response.data,
-      status: response.status
-    };
+    // response.data is the JSON payload from backend (e.g., {success: true, data: {...}})
+    // We return the full response.data so caller gets the structure they expect
+    return response.data;
   } catch (error) {
     // Retry logic for network errors
     if (error.type === 'NETWORK_ERROR' && retryCount > 0) {
@@ -232,8 +230,25 @@ export const setPassengerStatus = (pnr, status) =>
 export const getEligibilityMatrix = () =>
   safeRequest(() => api.get('/reallocation/eligibility'));
 
+export const sendUpgradeOffer = (data) =>
+  safeRequest(() => api.post('/reallocation/send-offer', data));
+
 export const applyReallocation = (allocations) =>
   safeRequest(() => api.post('/reallocation/apply', { allocations }));
+
+// ========================== TTE OFFLINE UPGRADE APIs ==========================
+
+export const addOfflineUpgrade = (data) =>
+  safeRequest(() => api.post('/tte/offline-upgrades/add', data));
+
+export const getOfflineUpgrades = () =>
+  safeRequest(() => api.get('/tte/offline-upgrades'));
+
+export const confirmOfflineUpgrade = (id) =>
+  safeRequest(() => api.post('/tte/offline-upgrades/confirm', { id }));
+
+export const rejectOfflineUpgrade = (id) =>
+  safeRequest(() => api.post('/tte/offline-upgrades/reject', { id }));
 
 // ========================== VISUALIZATION APIs ==========================
 

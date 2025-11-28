@@ -157,7 +157,7 @@ class ReallocationController {
   }
 
   /**
-   * Get vacant berths
+   * Get vacant berths with enhanced station information
    */
   getVacantBerths(req, res) {
     try {
@@ -171,12 +171,55 @@ class ReallocationController {
       }
 
       const vacancies = ReallocationService.getVacantBerths(trainState);
+      const currentStationIdx = trainState.currentStationIdx || 0;
+      const stations = trainState.stations || [];
+
+      // Enhance vacancies with full station details
+      const enhancedVacancies = vacancies.map(vacancy => {
+        const fromStation = stations[vacancy.fromIdx];
+        const toStation = stations[vacancy.toIdx];
+
+        // Determine "willOccupyAt" - the next station where someone boards
+        // This is the same as toStation in most cases
+        const willOccupyAtStation = toStation;
+
+        // Check if this berth is currently vacant (at current station)
+        const isCurrentlyVacant = currentStationIdx >= vacancy.fromIdx && currentStationIdx < vacancy.toIdx;
+
+        return {
+          coachNo: vacancy.coach,
+          berthNo: vacancy.berthNo,
+          fullBerthNo: vacancy.berth,
+          type: vacancy.type,
+          class: vacancy.class,
+
+          // Station names (user-friendly)
+          vacantFromStation: fromStation?.name || vacancy.vacantFrom,
+          vacantToStation: toStation?.name || vacancy.vacantTo,
+          willOccupyAt: willOccupyAtStation?.name || toStation?.name || vacancy.vacantTo,
+
+          // Station codes (short identifiers)
+          vacantFromStationCode: fromStation?.code || vacancy.vacantFrom,
+          vacantToStationCode: toStation?.code || vacancy.vacantTo,
+          willOccupyAtCode: willOccupyAtStation?.code || toStation?.code || vacancy.vacantTo,
+
+          // Index information
+          fromIdx: vacancy.fromIdx,
+          toIdx: vacancy.toIdx,
+          duration: vacancy.duration,
+
+          // Is this berth vacant RIGHT NOW at current station?
+          isCurrentlyVacant: isCurrentlyVacant
+        };
+      });
 
       res.json({
         success: true,
         data: {
-          total: vacancies.length,
-          vacancies: vacancies
+          total: enhancedVacancies.length,
+          vacancies: enhancedVacancies,
+          currentStation: stations[currentStationIdx]?.name || 'Unknown',
+          currentStationIdx: currentStationIdx
         }
       });
 

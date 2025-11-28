@@ -1,7 +1,7 @@
 // frontend/src/pages/AddPassengerPage.jsx - Modern Enhanced Design
 
 import React, { useState, useEffect } from "react";
-import { addPassenger, getTrainState } from "../services/api";
+import { addPassenger, getTrainState } from "../services/apiWithErrorHandling";
 import "./AddPassengerPage.css";
 
 const AddPassengerPage = ({ trainData, onClose }) => {
