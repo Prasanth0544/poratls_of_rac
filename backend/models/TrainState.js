@@ -1,4 +1,5 @@
 // backend/models/TrainState.js
+// Last updated: 2025-11-28 10:56 - Fixed vacant berths count (now checks segment occupancy)
 
 const Berth = require('./Berth');
 const SegmentMatrix = require('./SegmentMatrix');
@@ -244,24 +245,66 @@ class TrainState {
   }
 
   /**
-   * Get vacant berths
+   * Get vacant berths with next occupation information
    */
   getVacantBerths() {
     const vacant = [];
+    const currentIdx = this.currentStationIdx;
+
+    console.log(`\n🔍 Getting vacant berths at station index ${currentIdx}`);
+
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
-        if (berth.status === 'VACANT') {
+        // Check if berth is vacant at CURRENT STATION (using segment occupancy)
+        const passengersAtCurrentSegment = berth.segmentOccupancy[currentIdx] || [];
+
+        if (passengersAtCurrentSegment.length === 0) {
+          // Find when this berth will next be occupied
+          let nextOccupationStation = null;
+          let nextOccupationStationIdx = Infinity;
+
+          console.log(`   📍 Vacant Berth: ${berth.fullBerthNo}, Total Passengers: ${berth.passengers.length}`);
+
+          // Check all passengers on this berth
+          berth.passengers.forEach(passenger => {
+            console.log(`      - Passenger ${passenger.pnr}: from=${passenger.from} (idx=${passenger.fromIdx}), boarded=${passenger.boarded}, noShow=${passenger.noShow}`);
+
+            // Skip already boarded or no-show passengers
+            if (passenger.boarded || passenger.noShow) {
+              console.log(`        → Skipped (already boarded or no-show)`);
+              return;
+            }
+
+            // Find passengers who will board at future stations
+            if (passenger.fromIdx > currentIdx && passenger.fromIdx < nextOccupationStationIdx) {
+              nextOccupationStationIdx = passenger.fromIdx;
+              nextOccupationStation = passenger.from; // Station code where they board
+              console.log(`        → ✅ NEXT BOARDER: ${passenger.from} at index ${passenger.fromIdx}`);
+            } else {
+              console.log(`        → Not future boarder (fromIdx=${passenger.fromIdx}, current=${currentIdx})`);
+            }
+          });
+
+          // If no station found, it means berth stays vacant till end
+          const willOccupyAt = nextOccupationStation || '-';
+
+          console.log(`   ✨ Result: willOccupyAt = "${willOccupyAt}"\n`);
+
           vacant.push({
             coachNo: coach.coachNo,
             berthNo: berth.berthNo,
             fullBerthNo: berth.fullBerthNo,
             type: berth.type,
             class: coach.class,
-            vacantSegments: berth.getVacantSegments()
+            vacantSegments: berth.getVacantSegments(),
+            willOccupyAt: willOccupyAt, // NEW: Station where berth will next be occupied
+            nextOccupationStationIdx: nextOccupationStationIdx === Infinity ? null : nextOccupationStationIdx
           });
         }
       });
     });
+
+    console.log(`✅ Total vacant berths: ${vacant.length}\n`);
     return vacant;
   }
 
@@ -440,6 +483,159 @@ class TrainState {
     });
 
     return { success: true, pnr: pnr };
+  }
+
+  /**
+   * Mark boarded passenger as NO_SHOW
+   * For passengers who are already boarded (not in verification queue)
+   */
+  async markBoardedPassengerNoShow(pnr) {
+    const result = this.findPassenger(pnr);
+
+    if (!result) {
+      throw new Error(`Passenger with PNR ${pnr} not found`);
+    }
+
+    const { passenger } = result;
+
+    if (!passenger.boarded) {
+      throw new Error(`Passenger ${pnr} is not boarded`);
+    }
+
+    console.log(`❌ Marking boarded passenger ${pnr} as NO_SHOW`);
+
+    // Update in-memory state
+    passenger.noShow = true;
+    passenger.boarded = false;
+
+    // Update in database
+    const db = require('../config/db');
+    try {
+      const passengersCollection = await db.getPassengersCollection();
+      await passengersCollection.updateOne(
+        { PNR_Number: pnr },
+        { $set: { NO_show: true, Boarded: false } }
+      );
+      console.log(`✅ Updated NO_SHOW in database for ${pnr}`);
+    } catch (error) {
+      console.error(`Error updating NO_SHOW for ${pnr}:`, error);
+      throw error;
+    }
+
+    this.updateStats();
+
+    this.logEvent('NO_SHOW_MARKED', `Boarded passenger marked NO_SHOW`, {
+      pnr: pnr,
+      station: this.getCurrentStation()?.name
+    });
+
+    // Send notification to passenger (both online and offline)
+    try {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.sendNoShowMarkedNotification(pnr, passenger);
+    } catch (error) {
+      console.error(`Error sending no-show notification:`, error);
+    }
+
+    return { success: true, pnr: pnr };
+  }
+
+  /**
+   * Revert NO-SHOW status for a passenger
+   * Checks for berth collision before allowing revert
+   */
+  async revertBoardedPassengerNoShow(pnr) {
+    const result = this.findPassenger(pnr);
+
+    if (!result) {
+      throw new Error(`Passenger with PNR ${pnr} not found`);
+    }
+
+    const { passenger } = result;
+
+    if (!passenger.noShow) {
+      throw new Error(`Passenger ${pnr} is not marked as NO-SHOW`);
+    }
+
+    // Check for berth collision
+    const collision = this.checkBerthCollision(passenger.coach, passenger.berth, pnr);
+    if (collision) {
+      throw new Error(`Cannot revert: Berth ${passenger.coach}-${passenger.berth} has been allocated to another passenger (${collision.pnr})`);
+    }
+
+    console.log(`✅ Reverting NO-SHOW status for ${pnr}`);
+
+    // Update in-memory state
+    passenger.noShow = false;
+    passenger.boarded = true;
+    passenger.noShowRevertedAt = new Date();
+
+    // Update in database
+    const db = require('../config/db');
+    try {
+      const passengersCollection = await db.getPassengersCollection();
+      await passengersCollection.updateOne(
+        { PNR_Number: pnr },
+        {
+          $set: {
+            NO_show: false,
+            Boarded: true,
+            NoShowRevertedAt: new Date()
+          }
+        }
+      );
+      console.log(`✅ Reverted NO-SHOW in database for ${pnr}`);
+    } catch (error) {
+      console.error(`Error reverting NO-SHOW for ${pnr}:`, error);
+      throw error;
+    }
+
+    this.updateStats();
+
+    this.logEvent('NO_SHOW_REVERTED', `NO-SHOW status reverted for passenger`, {
+      pnr: pnr,
+      station: this.getCurrentStation()?.name,
+      berth: `${passenger.coach}-${passenger.berth}`
+    });
+
+    // Send notification to passenger (both online and offline)
+    try {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.sendNoShowRevertedNotification(pnr, passenger);
+    } catch (error) {
+      console.error(`Error sending revert notification:`, error);
+    }
+
+    return { success: true, pnr: pnr, passenger };
+  }
+
+  /**
+   * Check if berth has been allocated to another passenger (collision detection)
+   */
+  checkBerthCollision(coach, berth, originalPnr) {
+    // Search through all coaches
+    for (const [coachName, coachData] of Object.entries(this.coaches)) {
+      if (coachName !== coach) continue;
+
+      // Search through all berths
+      for (const [berthNum, berthData] of Object.entries(coachData.berths)) {
+        if (parseInt(berthNum) !== parseInt(berth)) continue;
+
+        // Check if berth is occupied by a different passenger
+        if (berthData.passenger && berthData.passenger.pnr !== originalPnr) {
+          const occupant = berthData.passenger;
+          if (occupant.boarded && !occupant.noShow) {
+            return {
+              pnr: occupant.pnr,
+              name: occupant.name,
+              status: occupant.pnrStatus
+            };
+          }
+        }
+      }
+    }
+
+    return null; // No collision
   }
 
   /**

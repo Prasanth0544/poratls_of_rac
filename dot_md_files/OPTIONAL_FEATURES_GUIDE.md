@@ -18,15 +18,6 @@
 ### **Optional (Performance)**
 10. ✅ Redis caching (Backend)
 
-### **~~Not Required Now~~**
-- ~~Voice input (TTE Portal)~~
-- ~~Upgrade probability estimator (Passenger)~~
-
----
-
-
-
-
 
 # Optional Features & Cost Analysis
 

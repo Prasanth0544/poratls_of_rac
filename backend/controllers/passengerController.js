@@ -821,6 +821,80 @@ class PassengerController {
       });
     }
   }
+
+  /**
+   * Self-revert NO-SHOW status (passenger initiated)
+   * POST /api/passenger/revert-no-show
+   * Body: { pnr: "PNR_NUMBER" }
+   * Headers: Authorization Bearer token (authenticated passenger)
+   */
+  async selfRevertNoShow(req, res) {
+    try {
+      const { pnr } = req.body;
+
+      if (!pnr) {
+        return res.status(400).json({
+          success: false,
+          message: 'PNR is required'
+        });
+      }
+
+      // Optional: Verify that the authenticated user owns this PNR
+      // if (req.user && req.user.pnr !== pnr) {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'You can only revert your own PNR'
+      //   });
+      // }
+
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({
+          success: false,
+          message: 'Train not initialized'
+        });
+      }
+
+      // Use the same revert method from TrainState
+      const result = await trainState.revertBoardedPassengerNoShow(pnr);
+
+      res.json({
+        success: true,
+        message: `NO-SHOW status reverted successfully for passenger ${pnr}`,
+        pnr: result.pnr,
+        passenger: result.passenger
+      });
+    } catch (error) {
+      console.error('❌ Error self-reverting no-show:', error);
+
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('not marked as NO-SHOW')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('Cannot revert')) {
+        return res.status(409).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
 }
 
 module.exports = new PassengerController();

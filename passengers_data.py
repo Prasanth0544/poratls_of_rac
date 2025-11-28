@@ -96,21 +96,21 @@ total_berths = total_sleeper_berths + total_ac_berths
 
 print(f"📊 CAPACITY ANALYSIS:")
 print(f"  Total Sleeper Berths: {total_sleeper_berths}")
-print(f"  Total 3A Berths: {total_ac_berths}")
+print(f"  Total AC_3_Tier Berths: {total_ac_berths}")
 print(f"  Total Berths Available: {total_berths}")
 print(f"  Passengers to Allocate: {TOTAL_PASSENGERS}")
 print(f"  Capacity Utilization: {(TOTAL_PASSENGERS/total_berths)*100:.1f}%")
 print()
 
 # ----------------------------
-# COACH NAMES (B1, B2 for 3A coaches)
+# COACH NAMES (B1, B2 for AC_3_Tier coaches)
 # ----------------------------
 s_coaches = [f"S{i}" for i in range(1, SLEEPER_COACHES + 1)]
 a_coaches = [f"B{i}" for i in range(1, AC_COACHES + 1)]
 
 print(f"🚇 COACH CONFIGURATION:")
 print(f"  Sleeper Coaches: {', '.join(s_coaches)}")
-print(f"  3A Coaches: {', '.join(a_coaches)}")
+print(f"  AC_3_Tier Coaches: {', '.join(a_coaches)}")
 print()
 
 # ----------------------------
@@ -395,7 +395,7 @@ def allocate_rac_pairs():
             if allocated:
                 break
         
-        # Try 3A (B1, B2) side lower berths if sleeper failed
+        # Try AC_3_Tier (B1, B2) side lower berths if sleeper failed
         if not allocated:
             for coach in a_coaches:
                 for berth in ac_berths["Side Lower"]:
@@ -418,7 +418,7 @@ def allocate_rac_pairs():
                                 "Mobile": gen_mobile(),
                                 "Email": gen_email(name),
                                 "PNR_Status": "RAC",
-                                "Class": "3A",
+                                "Class": "AC_3_Tier",
                                 "Rac_status": str(rac_global_counter + rac_num_offset),
                                 "Boarding_Station": stations[board][0],
                                 "Deboarding_Station": stations[alight][0],
@@ -463,7 +463,7 @@ def allocate_cnf_passengers():
                     for berth in berth_map[berth_type]:
                         if allocator.add_cnf_passenger(coach, berth, board, alight, idx, berth_type):
                             name = gen_name()
-                            coach_class = "Sleeper" if coach.startswith("S") else "3A"
+                            coach_class = "Sleeper" if coach.startswith("S") else "AC_3_Tier"
                             
                             passenger_data = {
                                 "IRCTC_ID": gen_irctc_id(irctc_counter),
@@ -622,9 +622,9 @@ wl_count = sum(1 for p in passengers if p["PNR_Status"] == "WL")
 online_count = sum(1 for p in passengers if p["Passenger_Status"] == "Online")
 offline_count = sum(1 for p in passengers if p["Passenger_Status"] == "Offline")
 
-# Count 3A vs Sleeper passengers
+# Count AC_3_Tier vs Sleeper passengers
 sleeper_count = sum(1 for p in passengers if p["Class"] == "Sleeper")
-threeA_count = sum(1 for p in passengers if p["Class"] == "3A")
+ac_3_tier_count = sum(1 for p in passengers if p["Class"] == "AC_3_Tier")
 
 # Peak calculation
 onboard = [0] * NUM_STATIONS
@@ -663,7 +663,7 @@ print(f"Collisions Found: {collision_count}")
 print(f"Peak Onboard: {peak} at {stations[peak_idx][0]}")
 print(f"Capacity: {'✅ WITHIN' if peak <= MAX_ONBOARD_CAPACITY else '❌ EXCEEDS'} ({peak}/{MAX_ONBOARD_CAPACITY})")
 print(f"Passenger Status - Online: {online_count}, Offline: {offline_count}")
-print(f"Class Distribution - Sleeper: {sleeper_count}, 3A: {threeA_count}")
+print(f"Class Distribution - Sleeper: {sleeper_count}, AC_3_Tier: {ac_3_tier_count}")
 
 # Show IRCTC_ID range
 if passengers:
@@ -720,10 +720,10 @@ print(f"✅ Exported: {json_file}")
 try:
     client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=2000)
     db = client['PassengersDB']
-    coll = db['P_2']
+    coll = db['P_1']
     coll.delete_many({})
     coll.insert_many(passengers)
-    print(f"✅ MongoDB: PassengersDB.P_3")
+    print(f"✅ MongoDB: PassengersDB.P_1")
 except Exception as e:
     print(f"⚠️ MongoDB skipped: {e}")
 

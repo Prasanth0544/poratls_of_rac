@@ -41,8 +41,25 @@ router.post('/auth/logout',
 router.post('/tte/mark-no-show',
   authMiddleware,
   requireRole(['TTE', 'ADMIN']),
-  (req, res) => tteController.markNoShowFromQueue(req, res)
+  (req, res) => tteController.markNoShow(req, res)
 );
+
+// Revert NO_SHOW status (TTE)
+router.post('/tte/revert-no-show',
+  authMiddleware,
+  requireRole(['TTE', 'ADMIN']),
+  (req, res) => tteController.revertNoShow(req, res)
+);
+
+// Passenger self-revert NO-SHOW status
+router.post('/passenger/revert-no-show',
+  // Note: Can add authMiddleware here if passenger authentication is required
+  // For now allowing based on PNR validation in controller
+  (req, res) => passengerController.selfRevertNoShow(req, res)
+);
+
+
+
 
 // Get eligibility matrix
 router.get('/reallocation/eligibility',

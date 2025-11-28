@@ -44,9 +44,23 @@ export const tteAPI = {
         return response.data;
     },
 
-    // Mark passenger as no-show
+    // Mark passenger as no-show (requires auth)
     markNoShow: async (pnr) => {
-        const response = await api.post('/tte/mark-no-show', { pnr });
+        const token = localStorage.getItem('token');
+        const response = await api.post('/tte/mark-no-show',
+            { pnr },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        return response.data;
+    },
+
+    // Revert no-show status (requires auth)
+    revertNoShow: async (pnr) => {
+        const token = localStorage.getItem('token');
+        const response = await api.post('/tte/revert-no-show',
+            { pnr },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
         return response.data;
     },
 

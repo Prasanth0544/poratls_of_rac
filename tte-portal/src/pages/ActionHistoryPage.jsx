@@ -102,7 +102,10 @@ function ActionHistoryPage() {
     const getActionIcon = (actionType) => {
         switch (actionType) {
             case 'MARK_NO_SHOW':
+            case 'NO_SHOW_MARKED':
                 return '🚫';
+            case 'NO_SHOW_REVERTED':
+                return '✅';
             case 'CONFIRM_BOARDING':
                 return '✅';
             case 'APPLY_UPGRADE':
@@ -116,6 +119,10 @@ function ActionHistoryPage() {
         switch (actionType) {
             case 'MARK_NO_SHOW':
                 return 'Marked NO_SHOW';
+            case 'NO_SHOW_MARKED':
+                return 'Marked NO-SHOW';
+            case 'NO_SHOW_REVERTED':
+                return 'Reverted NO-SHOW';
             case 'CONFIRM_BOARDING':
                 return 'Confirmed Boarding';
             case 'APPLY_UPGRADE':

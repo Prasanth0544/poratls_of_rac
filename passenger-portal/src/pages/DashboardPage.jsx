@@ -28,6 +28,7 @@ function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [upgradeOffer, setUpgradeOffer] = useState(null);
+    const [reverting, setReverting] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -121,6 +122,31 @@ function DashboardPage() {
         }
     };
 
+    const handleRevertNoShow = async () => {
+        if (!window.confirm('Are you present on the train? This will revert your NO-SHOW status.')) {
+            return;
+        }
+
+        setReverting(true);
+        try {
+            const response = await axios.post(
+                `${API_URL}/passenger/revert-no-show`,
+                { pnr: passenger?.PNR_Number },
+                { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+            );
+
+            if (response.data.success) {
+                alert('✅ NO-SHOW status cleared! You are confirmed as boarded.');
+                fetchData(); // Refresh passenger data
+            }
+        } catch (error) {
+            const errorMsg = error.response?.data?.message || 'Failed to revert NO-SHOW status';
+            alert('❌ ' + errorMsg);
+        } finally {
+            setReverting(false);
+        }
+    };
+
     if (loading) {
         return (
             <Container maxWidth="md" sx={{ mt: 8, textAlign: 'center' }}>
@@ -161,6 +187,49 @@ function DashboardPage() {
                     Your digital boarding pass is ready
                 </Typography>
             </Box>
+
+            {/* NO-SHOW Warning Banner */}
+            {passenger?.NO_show && (
+                <Alert
+                    severity="error"
+                    sx={{
+                        mb: 3,
+                        p: 2,
+                        border: '2px solid #d32f2f',
+                        borderRadius: '8px',
+                        backgroundColor: '#ffebee'
+                    }}
+                    action={
+                        <Button
+                            color="inherit"
+                            size="small"
+                            variant="outlined"
+                            onClick={handleRevertNoShow}
+                            disabled={reverting}
+                            sx={{
+                                fontWeight: 600,
+                                borderWidth: 2,
+                                '&:hover': { borderWidth: 2 }
+                            }}
+                        >
+                            {reverting ? 'Reverting...' : "I'm Here! Revert"}
+                        </Button>
+                    }
+                >
+                    <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                            ⚠️ YOU HAVE BEEN MARKED AS NO-SHOW
+                        </Typography>
+                        <Typography variant="body2">
+                            The Train Ticket Examiner (TTE) has marked you as not present on the train.
+                            If you ARE present, click the "I'm Here!" button to revert this status immediately.
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                            ⚠️ Your berth may be allocated to another passenger if not reverted!
+                        </Typography>
+                    </Box>
+                </Alert>
+            )}
 
             {/* Journey Tracker */}
             {trainState?.journey?.stations && (

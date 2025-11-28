@@ -73,6 +73,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
   const [loading, setLoading] = useState(true);
 
   const [searchPNR, setSearchPNR] = useState("");
+  const [searchCoach, setSearchCoach] = useState(""); // NEW: Coach filter
   const [filterStatus, setFilterStatus] = useState("all");
   const [showVacantBerths, setShowVacantBerths] = useState(false);
   const [vacantBerths, setVacantBerths] = useState([]);
@@ -95,68 +96,55 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vacantBerths, vacantFromStation, vacantToStation]);
 
-  const calculateVacantBerths = () => {
+  const calculateVacantBerths = async () => {
     if (!trainData || !trainData.coaches || !trainData.journeyStarted) {
       setVacantBerths([]);
       return;
     }
 
-    const currentIdx = trainData.currentStationIdx;
-    const stations = trainData.stations;
-    const vacant = [];
+    try {
+      // Fetch vacant berths from backend API
+      const response = await fetch('http://localhost:5000/api/train/vacant-berths');
+      const data = await response.json();
 
-    trainData.coaches.forEach((coach) => {
-      coach.berths.forEach((berth) => {
-        // Check if berth is vacant at current station
-        if (
-          berth.segmentOccupancy &&
-          berth.segmentOccupancy[currentIdx] &&
-          berth.segmentOccupancy[currentIdx].length === 0
-        ) {
-          // Find the station where it becomes vacant (last occupied segment before current)
-          let vacantFromIdx = currentIdx;
-          for (let i = currentIdx - 1; i >= 0; i--) {
-            if (berth.segmentOccupancy[i] !== null) {
-              vacantFromIdx = i + 1;
-              break;
-            }
-            if (i === 0) {
-              vacantFromIdx = 0; // Vacant from start
-            }
-          }
+      console.log('🔍 Vacant Berths API Response:', data);
 
-          // Find the station where it will become occupied (next occupied segment)
-          let vacantToIdx = berth.segmentOccupancy.length;
-          for (let i = currentIdx + 1; i < berth.segmentOccupancy.length; i++) {
-            if (berth.segmentOccupancy[i] !== null) {
-              vacantToIdx = i;
-              break;
-            }
-          }
+      if (data.success && data.data && data.data.vacancies) {
+        const currentIdx = trainData.currentStationIdx;
+        const stations = trainData.stations;
 
-          vacant.push({
-            coach: coach.coachNo,
+        // Transform backend data to match the frontend format
+        const vacant = data.data.vacancies.map(berth => {
+          console.log('📦 Berth data:', berth.fullBerthNo, 'willOccupyAt:', berth.willOccupyAt);
+
+          // Determine display value for "Will Occupy At"
+          const willOccupyDisplay = berth.willOccupyAt === '-' ? '—' : berth.willOccupyAt;
+          const willOccupyTitle = berth.willOccupyAt === '-' ? 'No passenger scheduled' : berth.willOccupyAt;
+
+          return {
+            coach: berth.coachNo,
             berthNo: berth.berthNo,
-            fullBerthNo: `${coach.coachNo}-${berth.berthNo}`,
+            fullBerthNo: berth.fullBerthNo,
             type: berth.type,
-            class: coach.class,
+            class: berth.class,
             currentStation: stations[currentIdx]?.code || "N/A",
-            vacantFromStation: stations[vacantFromIdx]?.code || "N/A",
-            vacantToStation:
-              vacantToIdx < stations.length
-                ? stations[vacantToIdx]?.code
-                : "END",
-            vacantFromStationName: stations[vacantFromIdx]?.name || "N/A",
-            vacantToStationName:
-              vacantToIdx < stations.length
-                ? stations[vacantToIdx]?.name
-                : "Journey End",
-          });
-        }
-      });
-    });
+            vacantFromStation: stations[currentIdx]?.code || "N/A", // Currently vacant
+            vacantToStation: willOccupyDisplay, // Show '—' instead of '-' for better visibility
+            vacantFromStationName: stations[currentIdx]?.name || "N/A",
+            vacantToStationName: willOccupyTitle
+          };
+        });
 
-    setVacantBerths(vacant);
+        console.log('✅ Processed vacant berths:', vacant);
+        setVacantBerths(vacant);
+      } else {
+        setVacantBerths([]);
+      }
+    } catch (error) {
+      console.error('Error fetching vacant berths:', error);
+      // Fallback to empty array
+      setVacantBerths([]);
+    }
   };
 
   const filterVacantBerths = () => {
@@ -234,6 +222,13 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     if (searchPNR.trim()) {
       filtered = filtered.filter((p) =>
         String(p.pnr).includes(searchPNR.trim()),
+      );
+    }
+
+    // Search by Coach
+    if (searchCoach.trim()) {
+      filtered = filtered.filter((p) =>
+        p.coach?.toLowerCase().includes(searchCoach.trim().toLowerCase()),
       );
     }
 
@@ -368,37 +363,79 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
         </div>
       )}
 
-      {/* Filters - Compact */}
-      <div className="filters">
-        <div className="filter-row">
+      {/* Search Boxes */}
+      <div style={{ marginBottom: '15px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             type="text"
-            placeholder="Enter PNR"
+            placeholder="🔍 Search by PNR..."
             value={searchPNR}
             onChange={(e) => setSearchPNR(e.target.value)}
-            className="filter-input"
+            style={{
+              width: '100%',
+              maxWidth: '300px',
+              padding: '10px 15px',
+              border: '2px solid #e1e8ed',
+              borderRadius: '6px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3498db'}
+            onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
           />
-          <button onClick={handleSearch} className="filter-btn">
-            Search
-          </button>
+          <input
+            type="text"
+            placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+            value={searchCoach}
+            onChange={(e) => setSearchCoach(e.target.value)}
+            style={{
+              width: '100%',
+              maxWidth: '300px',
+              padding: '10px 15px',
+              border: '2px solid #e1e8ed',
+              borderRadius: '6px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3498db'}
+            onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+          />
+          {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+            <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
+              {filteredPassengers.length} result(s)
+            </span>
+          )}
         </div>
+      </div>
 
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="filter-select"
-        >
-          <option value="all">All</option>
-          <option value="cnf">CNF</option>
-          <option value="rac">RAC</option>
-          <option value="boarded">Boarded</option>
-          <option value="no-show">No-Show</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="upcoming">Upcoming</option>
-        </select>
-
-
+      {/* Filter Options */}
+      <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <button onClick={() => setFilterStatus("all")} style={{ padding: '8px 20px', background: filterStatus === "all" ? '#3498db' : '#ecf0f1', color: filterStatus === "all" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "all" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          All ({counts?.total || 0})
+        </button>
+        <button onClick={() => setFilterStatus("cnf")} style={{ padding: '8px 20px', background: filterStatus === "cnf" ? '#27ae60' : '#ecf0f1', color: filterStatus === "cnf" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "cnf" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          CNF ({counts?.cnf || 0})
+        </button>
+        <button onClick={() => setFilterStatus("rac")} style={{ padding: '8px 20px', background: filterStatus === "rac" ? '#f39c12' : '#ecf0f1', color: filterStatus === "rac" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "rac" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          RAC ({counts?.rac || 0})
+        </button>
+        <button onClick={() => setFilterStatus("boarded")} style={{ padding: '8px 20px', background: filterStatus === "boarded" ? '#9b59b6' : '#ecf0f1', color: filterStatus === "boarded" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "boarded" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          Boarded ({counts?.boarded || 0})
+        </button>
+        <button onClick={() => setFilterStatus("no-show")} style={{ padding: '8px 20px', background: filterStatus === "no-show" ? '#e74c3c' : '#ecf0f1', color: filterStatus === "no-show" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "no-show" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          No-Show ({counts?.noShow || 0})
+        </button>
+        <button onClick={() => setFilterStatus("online")} style={{ padding: '8px 20px', background: filterStatus === "online" ? '#16a085' : '#ecf0f1', color: filterStatus === "online" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "online" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          Online ({counts?.online || 0})
+        </button>
+        <button onClick={() => setFilterStatus("offline")} style={{ padding: '8px 20px', background: filterStatus === "offline" ? '#7f8c8d' : '#ecf0f1', color: filterStatus === "offline" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "offline" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          Offline ({counts?.offline || 0})
+        </button>
+        <button onClick={() => setFilterStatus("upcoming")} style={{ padding: '8px 20px', background: filterStatus === "upcoming" ? '#1abc9c' : '#ecf0f1', color: filterStatus === "upcoming" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "upcoming" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+          Upcoming
+        </button>
       </div>
 
       {/* Vacant Berths Toggle Button - Separate Row */}

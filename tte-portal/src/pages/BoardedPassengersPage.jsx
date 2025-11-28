@@ -10,6 +10,8 @@ function BoardedPassengersPage() {
     const [currentStation, setCurrentStation] = useState("");
     const [filter, setFilter] = useState("all");
     const [updating, setUpdating] = useState(null);
+    const [searchPNR, setSearchPNR] = useState("");
+    const [searchCoach, setSearchCoach] = useState(""); // NEW: Coach filter
 
     // Fetch boarded passengers
     const fetchBoardedPassengers = async () => {
@@ -46,7 +48,6 @@ function BoardedPassengersPage() {
         try {
             const response = await tteAPI.markNoShow(pnr);
             if (response.success) {
-                // Update local state
                 setPassengers(prev => prev.map(p =>
                     p.pnr === pnr ? { ...p, noShow: true } : p
                 ));
@@ -59,11 +60,35 @@ function BoardedPassengersPage() {
         }
     };
 
-    // Filter passengers based on selected filter
+    // Revert no-show status
+    const handleRevertNoShow = async (pnr) => {
+        if (!window.confirm(`Revert NO-SHOW status for passenger ${pnr}?`)) {
+            return;
+        }
+
+        setUpdating(pnr);
+        try {
+            const response = await tteAPI.revertNoShow(pnr);
+            if (response.success) {
+                setPassengers(prev => prev.map(p =>
+                    p.pnr === pnr ? { ...p, noShow: false, boarded: true } : p
+                ));
+                alert('✅ NO-SHOW status reverted successfully');
+            }
+        } catch (error) {
+            alert('❌ Failed to revert: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    // Filter passengers based on selected filter and search
     const filteredPassengers = passengers.filter((p) => {
-        if (filter === "rac") return p.pnrStatus === "RAC";
-        if (filter === "cnf") return p.pnrStatus === "CNF";
-        return true; // all
+        if (filter === "rac" && p.pnrStatus !== "RAC") return false;
+        if (filter === "cnf" && p.pnrStatus !== "CNF") return false;
+        if (searchPNR && !p.pnr?.toLowerCase().includes(searchPNR.toLowerCase())) return false;
+        if (searchCoach && !p.coach?.toLowerCase().includes(searchCoach.toLowerCase())) return false; // NEW: Coach filter
+        return true;
     });
 
     const racCount = passengers.filter(p => p.pnrStatus === "RAC").length;
@@ -71,70 +96,80 @@ function BoardedPassengersPage() {
 
     return (
         <div className="passengers-page">
-            {/* Header */}
             <h2 style={{ marginBottom: '10px', color: '#2c3e50' }}>🚂 Currently Boarded Passengers</h2>
             <p style={{ marginBottom: '15px', color: '#5a6c7d', fontSize: '13px' }}>
                 Showing passengers currently onboard at <strong>{currentStation || "N/A"}</strong> ({passengers.length} passengers)
             </p>
 
+            {/* Search Box */}
+            <div style={{ marginBottom: '15px' }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                        type="text"
+                        placeholder="🔍 Search by PNR..."
+                        value={searchPNR}
+                        onChange={(e) => setSearchPNR(e.target.value)}
+                        style={{
+                            width: '100%',
+                            maxWidth: '300px',
+                            padding: '10px 15px',
+                            border: '2px solid #e1e8ed',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            outline: 'none',
+                            transition: 'border-color 0.2s ease',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#3498db'}
+                        onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+                    />
+                    <input
+                        type="text"
+                        placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+                        value={searchCoach}
+                        onChange={(e) => setSearchCoach(e.target.value)}
+                        style={{
+                            width: '100%',
+                            maxWidth: '300px',
+                            padding: '10px 15px',
+                            border: '2px solid #e1e8ed',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            outline: 'none',
+                            transition: 'border-color 0.2s ease',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#3498db'}
+                        onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+                    />
+                    {(searchPNR || searchCoach) && (
+                        <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
+                            {filteredPassengers.length} result(s)
+                        </span>
+                    )}
+                </div>
+            </div>
+
             {/* Filter Tabs */}
             <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                    onClick={() => setFilter("all")}
-                    style={{
-                        padding: '8px 20px',
-                        background: filter === "all" ? '#3498db' : '#ecf0f1',
-                        color: filter === "all" ? 'white' : '#2c3e50',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: filter === "all" ? '600' : '500',
-                        fontSize: '13px',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
+                <button onClick={() => setFilter("all")} style={{ padding: '8px 20px', background: filter === "all" ? '#3498db' : '#ecf0f1', color: filter === "all" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filter === "all" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
                     All ({passengers.length})
                 </button>
-                <button
-                    onClick={() => setFilter("cnf")}
-                    style={{
-                        padding: '8px 20px',
-                        background: filter === "cnf" ? '#27ae60' : '#ecf0f1',
-                        color: filter === "cnf" ? 'white' : '#2c3e50',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: filter === "cnf" ? '600' : '500',
-                        fontSize: '13px',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
+                <button onClick={() => setFilter("cnf")} style={{ padding: '8px 20px', background: filter === "cnf" ? '#27ae60' : '#ecf0f1', color: filter === "cnf" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filter === "cnf" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
                     CNF ({cnfCount})
                 </button>
-                <button
-                    onClick={() => setFilter("rac")}
-                    style={{
-                        padding: '8px 20px',
-                        background: filter === "rac" ? '#f39c12' : '#ecf0f1',
-                        color: filter === "rac" ? 'white' : '#2c3e50',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: filter === "rac" ? '600' : '500',
-                        fontSize: '13px',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
+                <button onClick={() => setFilter("rac")} style={{ padding: '8px 20px', background: filter === "rac" ? '#f39c12' : '#ecf0f1', color: filter === "rac" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filter === "rac" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
                     RAC ({racCount})
                 </button>
             </div>
 
-            {/* Table Only */}
+            {/* Table */}
             {loading ? (
                 <div className="empty-state">Loading boarded passengers...</div>
             ) : filteredPassengers.length === 0 ? (
                 <div className="empty-state">
-                    No {filter !== "all" ? filter : ""} boarded passengers at current station
+                    {(searchPNR || searchCoach) ?
+                        `No passengers found matching your search criteria` :
+                        `No ${filter !== "all" ? filter : ""} boarded passengers at current station`
+                    }
                 </div>
             ) : (
                 <div className="table-container">
@@ -175,43 +210,22 @@ function BoardedPassengersPage() {
                                     <td className="td-from">{passenger.from || "N/A"}</td>
                                     <td className="td-to">{passenger.to || "N/A"}</td>
                                     <td className="td-passenger-status">
-                                        <span
-                                            className={`current-status-btn ${passenger.passengerStatus?.toLowerCase() === "online"
-                                                    ? "online"
-                                                    : "offline"
-                                                }`}
-                                        >
+                                        <span className={`current-status-btn ${passenger.passengerStatus?.toLowerCase() === "online" ? "online" : "offline"}`}>
                                             {passenger.passengerStatus || "Offline"}
                                         </span>
                                     </td>
                                     <td style={{ textAlign: 'center' }}>
                                         {passenger.noShow ? (
-                                            <span style={{
-                                                padding: '4px 10px',
-                                                background: '#e74c3c',
-                                                color: 'white',
-                                                borderRadius: '4px',
-                                                fontSize: '11px',
-                                                fontWeight: '600'
-                                            }}>
-                                                NO-SHOW
-                                            </span>
+                                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
+                                                <span style={{ padding: '4px 10px', background: '#e74c3c', color: 'white', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
+                                                    NO-SHOW
+                                                </span>
+                                                <button onClick={() => handleRevertNoShow(passenger.pnr)} disabled={updating === passenger.pnr} style={{ padding: '4px 10px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: updating === passenger.pnr ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: updating === passenger.pnr ? 0.6 : 1 }}>
+                                                    {updating === passenger.pnr ? 'Reverting...' : 'Revert'}
+                                                </button>
+                                            </div>
                                         ) : (
-                                            <button
-                                                onClick={() => handleMarkNoShow(passenger.pnr)}
-                                                disabled={updating === passenger.pnr}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    background: '#95a5a6',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    fontSize: '11px',
-                                                    cursor: updating === passenger.pnr ? 'not-allowed' : 'pointer',
-                                                    fontWeight: '600',
-                                                    opacity: updating === passenger.pnr ? 0.6 : 1
-                                                }}
-                                            >
+                                            <button onClick={() => handleMarkNoShow(passenger.pnr)} disabled={updating === passenger.pnr} style={{ padding: '4px 10px', background: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: updating === passenger.pnr ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: updating === passenger.pnr ? 0.6 : 1 }}>
                                                 {updating === passenger.pnr ? 'Updating...' : 'Mark No-Show'}
                                             </button>
                                         )}
