@@ -7,15 +7,19 @@ const http = require('http');
 const db = require('./config/db');
 const wsManager = require('./config/websocket');
 const apiRoutes = require('./routes/api');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./config/swagger');
+const { errorHandler } = require('./utils/error-handler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -34,6 +38,13 @@ const httpServer = http.createServer(app);
 
 // API Routes
 app.use('/api', apiRoutes);
+
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+  swaggerOptions: {
+    persistAuthorization: true
+  }
+}));
 
 // Root route
 app.get('/', (req, res) => {
@@ -116,15 +127,8 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
+// Global error handler (must be last)
+app.use(errorHandler);
 
 // Start server
 async function startServer() {

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { initializeTrain, startJourney, getTrainState, moveToNextStation, resetTrain, markPassengerNoShow } from './services/api';
+import * as api from './services/apiWithErrorHandling';
 import wsService from './services/websocket';
-import LoginPage from './pages/LoginPage'; // ✅ NEW
+import ToastContainer from './components/ToastContainer';
+import APIDocumentationLink from './components/APIDocumentationLink';
+import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import RACQueuePage from './pages/RACQueuePage';
 import CoachesPage from './pages/CoachesPage';
@@ -12,8 +14,9 @@ import AddPassengerPage from './pages/AddPassengerPage';
 import AllocationDiagnosticsPage from './pages/AllocationDiagnosticsPage';
 import PhaseOnePage from './pages/PhaseOnePage';
 import ConfigPage from './pages/ConfigPage';
+import { webSocketConnectedToast, webSocketDisconnectedToast } from './services/toastNotification';
 import './App.css';
-import './UserMenu.css'; // ✅ NEW - 3-dot menu styles
+import './UserMenu.css';
 
 function App() {
   // ✅ NEW: Authentication state
@@ -58,11 +61,13 @@ function App() {
     wsService.on('connected', () => {
       console.log('✅ WebSocket connected');
       setWsConnected(true);
+      webSocketConnectedToast();
     });
 
     wsService.on('disconnected', () => {
       console.log('❌ WebSocket disconnected');
       setWsConnected(false);
+      webSocketDisconnectedToast();
     });
 
     // Listen to train updates
@@ -131,23 +136,25 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      const response = await initializeTrain();
+      const response = await api.initializeTrain();
 
       if (response.success) {
         await loadTrainState();
+      } else {
+        setError(response.error);
+        const shouldRedirect = (
+          response.error?.includes('Missing train configuration') ||
+          response.error?.includes('Missing train number') ||
+          response.error?.includes('journey date')
+        );
+        if (shouldRedirect) {
+          setCurrentPage('config');
+        }
       }
     } catch (err) {
       const msg = err.message || 'Failed to initialize train';
       setError(msg);
-      // If backend is not configured or missing required fields, redirect to configuration
-      const shouldRedirect = (
-        msg.includes('Missing train configuration') ||
-        msg.includes('Missing train number') ||
-        msg.includes('journey date')
-      );
-      if (shouldRedirect) {
-        setCurrentPage('config');
-      }
+      setCurrentPage('config');
     } finally {
       setLoading(false);
     }
@@ -155,15 +162,15 @@ function App() {
 
   const loadTrainState = async () => {
     try {
-      const response = await getTrainState();
+      const response = await api.getTrainState();
 
       if (response.success) {
         setTrainData(response.data);
-        // Only update journeyStarted from API if we don't already have it set to true
-        // This prevents overwriting when journey has started but API might not reflect it yet
         if (typeof response.data.journeyStarted !== 'undefined') {
           setJourneyStarted(prev => prev || response.data.journeyStarted);
         }
+      } else {
+        setError(response.error);
       }
     } catch (err) {
       setError(err.message || 'Failed to load train state');
@@ -175,11 +182,13 @@ function App() {
       setLoading(true);
       setError(null);
 
-      const response = await startJourney();
+      const response = await api.startJourney();
 
       if (response.success) {
         setJourneyStarted(true);
         await loadTrainState();
+      } else {
+        setError(response.error);
       }
     } catch (err) {
       setError(err.message || 'Failed to start journey');
@@ -193,7 +202,7 @@ function App() {
       setLoading(true);
       setError(null);
 
-      const response = await moveToNextStation();
+      const response = await api.moveToNextStation();
 
       if (response.success) {
         await loadTrainState();
@@ -206,7 +215,7 @@ function App() {
           `Current Onboard: ${response.data.stats.currentOnboard}\n` +
           `Vacant Berths: ${response.data.stats.vacantBerths}`);
       } else {
-        alert(response.message);
+        setError(response.error);
       }
     } catch (err) {
       setError(err.message || 'Failed to move to next station');
@@ -224,12 +233,14 @@ function App() {
       setLoading(true);
       setError(null);
 
-      const response = await resetTrain();
+      const response = await api.resetTrain();
 
       if (response.success) {
         setJourneyStarted(false);
         await loadTrainState();
         alert('✅ Train reset successfully!');
+      } else {
+        setError(response.error);
       }
     } catch (err) {
       setError(err.message || 'Failed to reset train');
@@ -243,11 +254,13 @@ function App() {
       setLoading(true);
       setError(null);
 
-      const response = await markPassengerNoShow(pnr);
+      const response = await api.markPassengerNoShow(pnr);
 
       if (response.success) {
         await loadTrainState();
         alert(`✅ ${response.data.name} marked as NO-SHOW\n\nBerth: ${response.data.berth}\nFrom: ${response.data.from} → ${response.data.to}`);
+      } else {
+        alert(`❌ Error: ${response.error}`);
       }
     } catch (err) {
       alert(`❌ Error: ${err.message || 'Failed to mark no-show'}`);
@@ -368,6 +381,9 @@ function App() {
 
   return (
     <div className="App">
+      {/* Toast Notification Container */}
+      <ToastContainer />
+
       <div className="app-header">
         <div className="header-content">
           <h1>🚂 RAC Reallocation System</h1>
@@ -375,6 +391,9 @@ function App() {
           <p className="route">
             {trainData?.stations[0]?.name} → {trainData?.stations[trainData.stations.length - 1]?.name}
           </p>
+        </div>
+        <div className="header-actions">
+          <APIDocumentationLink />
         </div>
         {/* ✅ NEW: 3-dot menu */}
         <div className="user-menu">
