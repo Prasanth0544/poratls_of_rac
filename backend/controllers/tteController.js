@@ -746,9 +746,61 @@ class TTEController {
             });
         } catch (error) {
             console.error("❌ Error undoing action:", error);
+
+            // Provide specific error responses based on error message
+            if (error.message.includes('Action not found')) {
+                return res.status(404).json({
+                    success: false,
+                    error: error.message,
+                    code: 'ACTION_NOT_FOUND'
+                });
+            }
+
+            if (error.message.includes('already undone')) {
+                return res.status(409).json({
+                    success: false,
+                    error: error.message,
+                    code: 'ACTION_ALREADY_UNDONE'
+                });
+            }
+
+            if (error.message.includes('too old to undo')) {
+                return res.status(410).json({
+                    success: false,
+                    error: error.message,
+                    code: 'ACTION_EXPIRED'
+                });
+            }
+
+            if (error.message.includes('Cannot undo actions from previous stations')) {
+                return res.status(409).json({
+                    success: false,
+                    error: error.message,
+                    code: 'STATION_MISMATCH'
+                });
+            }
+
+            if (error.message.includes('Cannot undo') && error.message.includes('now occupied')) {
+                return res.status(409).json({
+                    success: false,
+                    error: error.message,
+                    code: 'BERTH_COLLISION'
+                });
+            }
+
+            if (error.message.includes('Unknown action type')) {
+                return res.status(400).json({
+                    success: false,
+                    error: error.message,
+                    code: 'UNKNOWN_ACTION_TYPE'
+                });
+            }
+
+            // Generic error
             res.status(400).json({
                 success: false,
-                error: error.message
+                error: error.message,
+                code: 'UNDO_FAILED'
             });
         }
     }

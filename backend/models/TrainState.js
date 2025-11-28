@@ -783,6 +783,10 @@ class TrainState {
         await this._undoBoarding(action);
         break;
 
+      case 'APPLY_UPGRADE':
+        await this._undoRACUpgrade(action);
+        break;
+
       default:
         throw new Error(`Unknown action type: ${action.action}`);
     }
@@ -835,7 +839,7 @@ class TrainState {
   }
 
   /**
-   * Undo boarding confirmation
+   * Undo boarding confirmation with collision detection
    */
   async _undoBoarding(action) {
     const db = require('../config/db');
@@ -843,6 +847,29 @@ class TrainState {
 
     if (!passenger) {
       throw new Error(`Passenger ${action.target.pnr} not found`);
+    }
+
+    // Collision Detection: Check if berth state has changed
+    if (passenger.Coach && passenger.Seat_Number) {
+      const berth = this.findBerth(passenger.Coach, passenger.Seat_Number);
+
+      if (berth) {
+        // Check if another passenger is now using this berth
+        if (berth.occupants.length > 0 && !berth.occupants.includes(action.target.pnr)) {
+          throw new Error(
+            `Cannot undo boarding: berth ${passenger.Coach}-${passenger.Seat_Number} ` +
+            `is now occupied by ${berth.occupants[0]}`
+          );
+        }
+
+        // Check if berth status is inconsistent
+        if (berth.status === 'vacant' && action.newState.boarded === true) {
+          console.warn(
+            `⚠️ Berth state mismatch for ${action.target.pnr}: ` +
+            `expected occupied, found vacant`
+          );
+        }
+      }
     }
 
     // Restore to not boarded
@@ -854,20 +881,102 @@ class TrainState {
       { $set: { Boarded: false } }
     );
 
-    // Add back to verification queue
+    // Add back to verification queue for re-verification
     this.boardingVerificationQueue.set(action.target.pnr, {
       pnr: action.target.pnr,
       name: passenger.Name,
       seat: `${passenger.Coach}-${passenger.Seat_Number}`,
-      verificationStatus: 'PENDING'
+      verificationStatus: 'PENDING',
+      undoneAt: new Date().toISOString()
     });
 
     // Update stats
     if (action.previousState.boarded === false && action.newState.boarded === true) {
       this.stats.totalBoarded--;
+      this.stats.currentOnboard--;
     }
 
-    console.log(`↩️ Undone boarding for ${action.target.pnr}`);
+    console.log(
+      `↩️ Undone boarding for ${action.target.pnr} ` +
+      `at ${this.stations[this.currentStationIdx]?.name}`
+    );
+  }
+
+  /**
+   * Undo RAC upgrade
+   * Restores passenger from CNF to RAC status and deallocates the new berth
+   */
+  async _undoRACUpgrade(action) {
+    const db = require('../config/db');
+    const passenger = this.findPassengerByPNR(action.target.pnr);
+
+    if (!passenger) {
+      throw new Error(`Passenger ${action.target.pnr} not found`);
+    }
+
+    // Get the berth that was allocated during upgrade
+    const upgradedBerth = this.findBerth(
+      action.newState.coach,
+      action.newState.seat
+    );
+
+    if (!upgradedBerth) {
+      throw new Error(
+        `Cannot undo upgrade: berth ${action.newState.coach}-${action.newState.seat} not found`
+      );
+    }
+
+    // Check for collision: Is another passenger now using this berth?
+    if (upgradedBerth.status === 'occupied' && upgradedBerth.occupants[0] !== action.target.pnr) {
+      throw new Error(
+        `Cannot undo upgrade: berth is now occupied by ${upgradedBerth.occupants[0]}`
+      );
+    }
+
+    // Restore passenger to RAC status
+    passenger.pnrStatus = 'RAC';
+    passenger.Coach = action.previousState.coach || null;
+    passenger.Seat_Number = action.previousState.seat || null;
+
+    // Deallocate the upgraded berth
+    upgradedBerth.removePassenger(action.target.pnr);
+    upgradedBerth.updateStatus();
+
+    // Add passenger back to RAC queue
+    if (!this.racQueue.find(r => r.pnr === action.target.pnr)) {
+      this.racQueue.push({
+        pnr: action.target.pnr,
+        name: passenger.Name,
+        racNumber: passenger.RAC_Status || this.racQueue.length + 1,
+        from: passenger.From,
+        to: passenger.To,
+        class: passenger.Class,
+        age: passenger.Age,
+        gender: passenger.Gender,
+        boarded: false
+      });
+    }
+
+    // Update database
+    await db.getPassengersCollection().updateOne(
+      { PNR_Number: action.target.pnr },
+      {
+        $set: {
+          pnrStatus: 'RAC',
+          Coach: action.previousState.coach || null,
+          Seat_Number: action.previousState.seat || null
+        }
+      }
+    );
+
+    // Update stats
+    this.stats.totalRACUpgraded--;
+    this.stats.vacantBerths++;
+
+    console.log(
+      `↩️ Undone RAC upgrade for ${action.target.pnr}: ` +
+      `${action.newState.coach}-${action.newState.seat} → RAC Queue`
+    );
   }
 
   /**
