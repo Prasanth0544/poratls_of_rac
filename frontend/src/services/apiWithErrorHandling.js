@@ -230,25 +230,8 @@ export const setPassengerStatus = (pnr, status) =>
 export const getEligibilityMatrix = () =>
   safeRequest(() => api.get('/reallocation/eligibility'));
 
-export const sendUpgradeOffer = (data) =>
-  safeRequest(() => api.post('/reallocation/send-offer', data));
-
 export const applyReallocation = (allocations) =>
   safeRequest(() => api.post('/reallocation/apply', { allocations }));
-
-// ========================== TTE OFFLINE UPGRADE APIs ==========================
-
-export const addOfflineUpgrade = (data) =>
-  safeRequest(() => api.post('/tte/offline-upgrades/add', data));
-
-export const getOfflineUpgrades = () =>
-  safeRequest(() => api.get('/tte/offline-upgrades'));
-
-export const confirmOfflineUpgrade = (id) =>
-  safeRequest(() => api.post('/tte/offline-upgrades/confirm', { id }));
-
-export const rejectOfflineUpgrade = (id) =>
-  safeRequest(() => api.post('/tte/offline-upgrades/reject', { id }));
 
 // ========================== VISUALIZATION APIs ==========================
 

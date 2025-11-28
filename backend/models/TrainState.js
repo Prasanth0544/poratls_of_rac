@@ -194,12 +194,12 @@ class TrainState {
         // For vacant berth calculation: check if berth can accommodate more passengers 
         // from current station onwards (i.e., for segments starting at currentIdx)
         let berthCanAccommodateMore = false;
-        
+
         // Check all segments from current station onwards
         for (let segIdx = currentIdx; segIdx < this.stations.length - 1; segIdx++) {
           const passengersInSegment = berth.segmentOccupancy[segIdx] || [];
           const berthCapacity = berth.type === 'Side Lower' ? 2 : 1;
-          
+
           // If berth has space in ANY upcoming segment, count as vacant
           if (passengersInSegment.length < berthCapacity) {
             berthCanAccommodateMore = true;
@@ -321,48 +321,67 @@ class TrainState {
 
   /**
    * Helper: Find ALL vacant segment ranges for a berth across entire journey
+   * REWRITTEN: Checks if segment is covered by ANY passenger's journey (fromIdx to toIdx)
    */
   _findAllVacantRanges(berth) {
     const ranges = [];
     let rangeStart = null;
 
-    for (let i = 0; i < berth.segmentOccupancy.length; i++) {
-      const passengersAtSegment = berth.segmentOccupancy[i] || [];
+    // For each segment, check if ANY passenger's journey covers it
+    for (let segmentIdx = 0; segmentIdx < berth.segmentOccupancy.length; segmentIdx++) {
 
-      if (passengersAtSegment.length === 0) {
-        // Segment is vacant
+      // Check if this segment is covered by ANY passenger's journey
+      let isOccupied = false;
+
+      for (const passenger of berth.passengers) {
+        // Skip no-show passengers
+        if (passenger.noShow) {
+          continue;
+        }
+
+        // Check if this segment is within passenger's journey range
+        // Passenger occupies segments from fromIdx to toIdx-1 (inclusive)
+        if (passenger.fromIdx <= segmentIdx && segmentIdx < passenger.toIdx) {
+          isOccupied = true;
+          break;
+        }
+      }
+
+      if (!isOccupied) {
+        // Segment is VACANT
         if (rangeStart === null) {
-          rangeStart = i; // Start of vacant range
+          rangeStart = segmentIdx;
         }
       } else {
-        // Segment is occupied
+        // Segment is OCCUPIED
         if (rangeStart !== null) {
           // End of vacant range
           ranges.push({
             fromIdx: rangeStart,
-            toIdx: i,
+            toIdx: segmentIdx,
             fromStation: this.stations[rangeStart]?.name || this.stations[rangeStart]?.code || `Station ${rangeStart}`,
-            toStation: this.stations[i]?.name || this.stations[i]?.code || `Station ${i}`,
+            toStation: this.stations[segmentIdx]?.name || this.stations[segmentIdx]?.code || `Station ${segmentIdx}`,
             fromStationCode: this.stations[rangeStart]?.code || `S${rangeStart}`,
-            toStationCode: this.stations[i]?.code || `S${i}`
+            toStationCode: this.stations[segmentIdx]?.code || `S${segmentIdx}`
           });
           rangeStart = null;
         }
       }
     }
 
-    // Handle final range that extends to end of journey
+    // Handle final range extending to end of journey
     if (rangeStart !== null) {
-      const endName = berth.segmentOccupancy.length < this.stations.length ?
-        (this.stations[berth.segmentOccupancy.length]?.name || 'Journey End') :
+      const endIdx = berth.segmentOccupancy.length;
+      const endName = endIdx < this.stations.length ?
+        (this.stations[endIdx]?.name || 'Journey End') :
         'Journey End';
-      const endCode = berth.segmentOccupancy.length < this.stations.length ?
-        (this.stations[berth.segmentOccupancy.length]?.code || 'END') :
+      const endCode = endIdx < this.stations.length ?
+        (this.stations[endIdx]?.code || 'END') :
         'END';
 
       ranges.push({
         fromIdx: rangeStart,
-        toIdx: berth.segmentOccupancy.length,
+        toIdx: endIdx,
         fromStation: this.stations[rangeStart]?.name || this.stations[rangeStart]?.code || `Station ${rangeStart}`,
         toStation: endName,
         fromStationCode: this.stations[rangeStart]?.code || `S${rangeStart}`,

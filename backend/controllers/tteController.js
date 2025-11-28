@@ -47,7 +47,7 @@ class TTEController {
             }
 
             if (coach) {
-                passengers = passengers.filter(p => p.coach === coach);
+                passengers = passengers.filter(p => p.coach?.toLowerCase() === coach.toLowerCase());
             }
 
             res.json({

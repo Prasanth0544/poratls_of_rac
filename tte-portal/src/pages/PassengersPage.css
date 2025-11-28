@@ -718,7 +718,14 @@
 .status-btn.cancel-btn {
   background: #f44336;
   color: white;
-  min-width: 30px;
+  min-width: 20px;
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 1;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .status-btn.cancel-btn:hover {

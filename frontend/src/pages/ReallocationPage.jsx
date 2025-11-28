@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import * as api from '../services/apiWithErrorHandling';
+import apiClient from '../services/apiWithErrorHandling';
 import './ReallocationPage.css';
 
 const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
@@ -65,7 +66,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
         try {
             if (isOnline) {
                 // Send upgrade offer to online passenger
-                const res = await api.sendUpgradeOffer({
+                const res = await apiClient.post('/reallocation/send-offer', {
                     pnr: candidate.pnr,
                     berthDetails: {
                         coach: matrixItem.coach,
@@ -74,7 +75,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                     }
                 });
 
-                if (res.success) {
+                if (res.data.success) {
                     toast.success(
                         `📤 Upgrade offer sent to ${candidate.name}! Waiting for acceptance...`,
                         { duration: 4000, icon: '🔔' }
@@ -87,7 +88,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                 }
             } else {
                 // Add to offline upgrades queue for TTE
-                const res = await api.addOfflineUpgrade({
+                const res = await apiClient.post('/tte/offline-upgrades/add', {
                     pnr: candidate.pnr,
                     berthDetails: {
                         coach: matrixItem.coach,
@@ -96,7 +97,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                     }
                 });
 
-                if (res.success) {
+                if (res.data.success) {
                     toast.info(
                         `📋 ${candidate.name} added to TTE offline upgrades. TTE confirmation required.`,
                         { duration: 4000, icon: 'ℹ️' }
@@ -108,7 +109,7 @@ const ReallocationPage = ({ trainData, loadTrainState, onClose }) => {
                 }
             }
         } catch (error) {
-            toast.error(error.message || 'Failed to send upgrade offer');
+            toast.error(error.response?.data?.message || 'Failed to send upgrade offer');
         } finally {
             setApplying(null);
         }

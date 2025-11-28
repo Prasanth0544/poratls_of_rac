@@ -16,7 +16,13 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+    'http://localhost:3000',  // Admin Portal (React)
+    'http://localhost:3001',  // TTE Portal (old port)
+    'http://localhost:3002',  // Passenger Portal (old port)
+    'http://localhost:5174',  // TTE Portal (Vite)
+    'http://localhost:5173'   // Passenger Portal (Vite)
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -146,7 +152,7 @@ async function startServer() {
 
     httpServer.listen(PORT, () => {
       const config = db.getConfig();
-      
+
       console.log('');
       console.log('╔════════════════════════════════════════════╗');
       console.log('║   🚂 RAC REALLOCATION API SERVER V2.0    ║');
@@ -172,7 +178,7 @@ async function startServer() {
       console.log(`  curl http://localhost:${PORT}/api/health`);
       console.log('');
     });
-    
+
   } catch (error) {
     console.error('❌ Unexpected error in startServer:', error.message);
   }
@@ -181,13 +187,13 @@ async function startServer() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
-  
+
   // Close WebSocket connections
   wsManager.closeAll();
-  
+
   // Close MongoDB connections
   await db.close();
-  
+
   // Close HTTP server
   httpServer.close(() => {
     console.log('✅ Server closed');

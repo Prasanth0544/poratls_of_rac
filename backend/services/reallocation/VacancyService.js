@@ -42,7 +42,8 @@ class VacancyService {
 
   /**
    * Find continuous vacant segment ranges in a berth
-   * Groups consecutive null values in segmentOccupancy array
+   * Groups consecutive vacant segments (empty arrays in segmentOccupancy)
+   * FIXED: Now supports array-based occupancy for RAC sharing
    * @private
    */
   _getVacantSegmentRanges(berth, stations) {
@@ -50,7 +51,14 @@ class VacancyService {
     let startIdx = null;
 
     for (let i = 0; i < berth.segmentOccupancy.length; i++) {
-      if (berth.segmentOccupancy[i] === null) {
+      // FIX: Check if segment is vacant (empty array or null)
+      // After Berth.js changes, segmentOccupancy[i] is an array of PNRs
+      // Vacant = array is empty (length === 0)
+      const isVacant = Array.isArray(berth.segmentOccupancy[i])
+        ? berth.segmentOccupancy[i].length === 0
+        : berth.segmentOccupancy[i] === null; // Fallback for old data
+
+      if (isVacant) {
         // Start of a vacant segment
         if (startIdx === null) {
           startIdx = i;

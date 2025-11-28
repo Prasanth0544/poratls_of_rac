@@ -22,15 +22,21 @@ function DashboardPage() {
                 tteAPI.getPassengers({})
             ]);
 
+            console.log('🔍 TTE Dashboard - Train Response:', trainRes);
+            console.log('🔍 TTE Dashboard - Passengers Response:', passengersRes);
+
             if (trainRes.success) {
                 setTrainState(trainRes.data);
+                console.log('✅ Train state set:', trainRes.data);
             }
 
             if (passengersRes.success) {
-                setPassengers(passengersRes.data.passengers || []);
+                const pax = passengersRes.data.passengers || [];
+                console.log('✅ Setting passengers count:', pax.length);
+                setPassengers(pax);
             }
         } catch (error) {
-            console.error('Error loading dashboard data:', error);
+            console.error('❌ Error loading dashboard data:', error);
         } finally {
             setLoading(false);
         }

@@ -77,6 +77,7 @@ function PassengersPage() {
   const [filteredVacantBerths, setFilteredVacantBerths] = useState([]);
   const [vacantFromStation, setVacantFromStation] = useState("");
   const [vacantToStation, setVacantToStation] = useState("");
+  const [vacantCoach, setVacantCoach] = useState(""); // NEW: Coach filter for vacant berths
 
   useEffect(() => {
     loadData();
@@ -86,12 +87,12 @@ function PassengersPage() {
     applyFilters();
     calculateVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passengers, searchPNR, filterStatus, trainData]);
+  }, [passengers, searchPNR, searchCoach, filterStatus, trainData]);
 
   useEffect(() => {
     filterVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vacantBerths, vacantFromStation, vacantToStation]);
+  }, [vacantBerths, vacantFromStation, vacantToStation, vacantCoach]);
 
   const calculateVacantBerths = async () => {
     if (!trainData || !trainData.coaches || !trainData.journeyStarted) {
@@ -126,6 +127,8 @@ function PassengersPage() {
               currentStationCode: trainData.stations[trainData.currentStationIdx]?.code || "",
               vacantFromStation: berth.vacantFromStation,
               vacantToStation: berth.vacantToStation,
+              vacantFromStationCode: berth.vacantFromStationCode || berth.vacantFromStation,
+              vacantToStationCode: berth.vacantToStationCode || berth.vacantToStation,
               willOccupyAt: berth.willOccupyAt,
               isCurrentlyVacant: berth.isCurrentlyVacant
             };
@@ -143,14 +146,45 @@ function PassengersPage() {
   };
 
   const filterVacantBerths = () => {
-    // For TTE Portal: Just display all current station vacant berths
-    // (Already filtered by isCurrentlyVacant in calculateVacantBerths)
-    setFilteredVacantBerths([...vacantBerths]);
+    let filtered = [...vacantBerths];
+
+    // Filter by coach (case-insensitive)
+    if (vacantCoach.trim()) {
+      const searchTerm = vacantCoach.toLowerCase();
+      filtered = filtered.filter(
+        (berth) => berth.coach?.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Filter by "from" station (check both code and name, case-insensitive)
+    if (vacantFromStation.trim()) {
+      const searchTerm = vacantFromStation.toLowerCase();
+      filtered = filtered.filter(
+        (berth) =>
+          berth.vacantFromStation?.toLowerCase().includes(searchTerm) ||
+          berth.vacantFromStationName?.toLowerCase().includes(searchTerm) ||
+          berth.vacantFromStationCode?.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Filter by "to" station (check both code and name, case-insensitive)
+    if (vacantToStation.trim()) {
+      const searchTerm = vacantToStation.toLowerCase();
+      filtered = filtered.filter(
+        (berth) =>
+          berth.vacantToStation?.toLowerCase().includes(searchTerm) ||
+          berth.vacantToStationName?.toLowerCase().includes(searchTerm) ||
+          berth.vacantToStationCode?.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    setFilteredVacantBerths(filtered);
   };
 
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 TTE PassengersPage - Starting data load...');
 
       // TTE API structure - fetch passengers AND train state
       const [passengersRes, trainStateRes] = await Promise.all([
@@ -158,8 +192,12 @@ function PassengersPage() {
         tteAPI.getTrainState()
       ]);
 
+      console.log('📦 Passengers Response:', passengersRes);
+      console.log('📦 Train State Response:', trainStateRes);
+
       if (passengersRes.success) {
         const allPassengers = passengersRes.data.passengers || [];
+        console.log(`✅ Setting ${allPassengers.length} passengers`);
         setPassengers(allPassengers);
 
         // Calculate counts from data
@@ -172,16 +210,24 @@ function PassengersPage() {
           online: allPassengers.filter(p => p.passengerStatus?.toLowerCase() === 'online').length,
           offline: allPassengers.filter(p => !p.passengerStatus || p.passengerStatus.toLowerCase() === 'offline').length
         };
+        console.log('📊 Counts:', counts);
         setCounts(counts);
+      } else {
+        console.error('❌ Passengers API failed:', passengersRes);
       }
 
       if (trainStateRes.success) {
+        console.log('✅ Train state set');
         setTrainData(trainStateRes.data);
+      } else {
+        console.error('❌ Train state API failed:', trainStateRes);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("❌ Error loading data:", error);
+      console.error("Error stack:", error.stack);
     } finally {
       setLoading(false);
+      console.log('✅ Load complete');
     }
   };
 
@@ -204,6 +250,13 @@ function PassengersPage() {
     if (searchPNR.trim()) {
       filtered = filtered.filter((p) =>
         String(p.pnr).includes(searchPNR.trim()),
+      );
+    }
+
+    // Search by Coach
+    if (searchCoach.trim()) {
+      filtered = filtered.filter((p) =>
+        p.coach?.toLowerCase().includes(searchCoach.trim().toLowerCase()),
       );
     }
 
@@ -410,8 +463,15 @@ function PassengersPage() {
           {/* Vacant Berths Filter */}
           <div className="vacant-filters">
             <div className="vacant-filter-group">
-              <label className="filter-label">🔍 Filter by Stations</label>
+              <label className="filter-label">🔍 Filter by Coach & Stations</label>
               <div className="vacant-filter-inputs">
+                <input
+                  type="text"
+                  placeholder="Coach: (e.g., S1, B1, B2...)"
+                  value={vacantCoach}
+                  onChange={(e) => setVacantCoach(e.target.value)}
+                  className="vacant-filter-input"
+                />
                 <input
                   type="text"
                   placeholder="From Station: (Enter: Station Name/Code)"
@@ -428,6 +488,7 @@ function PassengersPage() {
                 />
                 <button
                   onClick={() => {
+                    setVacantCoach("");
                     setVacantFromStation("");
                     setVacantToStation("");
                   }}
@@ -460,6 +521,7 @@ function PassengersPage() {
                     <thead>
                       <tr>
                         <th>No.</th>
+                        <th>Coach</th>
                         <th>Berth</th>
                         <th>Type</th>
                         <th>Class</th>
@@ -472,6 +534,7 @@ function PassengersPage() {
                       {filteredVacantBerths.map((berth, idx) => (
                         <tr key={berth.fullBerthNo}>
                           <td className="td-no">{idx + 1}</td>
+                          <td className="td-coach">{berth.coach}</td>
                           <td className="td-berth">{berth.fullBerthNo}</td>
                           <td className="td-type">{berth.type}</td>
                           <td className="td-class">{berth.class}</td>
@@ -514,6 +577,7 @@ function PassengersPage() {
                     <th className="th-gender">Gender</th>
                     <th className="th-status">Status</th>
                     <th className="th-rac">RAC Que_no</th>
+                    <th>Coach</th>
                     <th>Class</th>
                     <th>From</th>
                     <th>To</th>
@@ -538,6 +602,7 @@ function PassengersPage() {
                         </span>
                       </td>
                       <td className="td-rac">{p.racStatus || '-'}</td>
+                      <td className="td-coach">{p.coach}</td>
                       <td className="td-class">{p.class}</td>
                       <td className="td-from">{p.from}</td>
                       <td className="td-to">{p.to}</td>

@@ -58,19 +58,6 @@ router.post('/passenger/revert-no-show',
   (req, res) => passengerController.selfRevertNoShow(req, res)
 );
 
-// Get eligibility matrix
-router.get('/reallocation/eligibility',
-  authMiddleware,
-  requireRole(['ADMIN']),
-  (req, res) => reallocationController.getEligibilityMatrix(req, res)
-);
-
-// ✅ NEW: Send upgrade offer (online passengers)
-router.post('/reallocation/send-offer',
-  authMiddleware,
-  requireRole(['ADMIN']),
-  (req, res) => reallocationController.sendUpgradeOffer(req, res)
-);
 
 // Apply reallocation manually
 router.post('/reallocation/apply',
