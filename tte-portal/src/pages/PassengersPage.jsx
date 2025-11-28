@@ -1,4 +1,5 @@
 // tte-portal/src/pages/PassengersPage.jsx
+// Updated to fix export issue
 
 import React, { useState, useEffect } from "react";
 import { tteAPI } from "../api";
@@ -69,6 +70,7 @@ function PassengersPage() {
   const [trainData, setTrainData] = useState(null); // Fetch from TTE API
 
   const [searchPNR, setSearchPNR] = useState("");
+  const [searchCoach, setSearchCoach] = useState("");
   const [filterStatus, setFilterStatus] = useState("boarded"); // DEFAULT: Show only boarded
   const [showVacantBerths, setShowVacantBerths] = useState(false);
   const [vacantBerths, setVacantBerths] = useState([]);
@@ -102,76 +104,48 @@ function PassengersPage() {
       const response = await fetch('http://localhost:5000/api/train/vacant-berths');
       const data = await response.json();
 
-      console.log('🔍 TTE Portal - Vacant Berths API Response:', data);
+      console.log('🔍 TTE Portal - Vacant Berths API Response (ALL segments):', data);
 
       if (data.success && data.data && data.data.vacancies) {
-        const currentIdx = trainData.currentStationIdx;
-        const stations = trainData.stations;
+        // TTE Portal: Filter to show ONLY vacant berths at current station
+        const currentStationName = trainData.stations[trainData.currentStationIdx]?.name || "N/A";
+        
+        const vacant = data.data.vacancies
+          .filter(berth => berth.isCurrentlyVacant) // Only show berths vacant NOW at current station
+          .map(berth => {
+            console.log('📦 TTE Portal - Current station vacant berth:', berth.fullBerthNo,
+              `Vacant at: ${currentStationName}`);
 
-        // Transform backend data to match the frontend format
-        const vacant = data.data.vacancies.map(berth => {
-          console.log('📦 TTE Portal - Berth data:', berth.fullBerthNo, 'willOccupyAt:', berth.willOccupyAt);
+            return {
+              coach: berth.coachNo,
+              berthNo: berth.berthNo,
+              fullBerthNo: berth.fullBerthNo,
+              type: berth.type,
+              class: berth.class,
+              currentStation: currentStationName,
+              currentStationCode: trainData.stations[trainData.currentStationIdx]?.code || "",
+              vacantFromStation: berth.vacantFromStation,
+              vacantToStation: berth.vacantToStation,
+              willOccupyAt: berth.willOccupyAt,
+              isCurrentlyVacant: berth.isCurrentlyVacant
+            };
+          });
 
-          // Determine display value for "Will Occupy At"
-          const willOccupyDisplay = berth.willOccupyAt === '-' ? '—' : berth.willOccupyAt;
-          const willOccupyTitle = berth.willOccupyAt === '-' ? 'No passenger scheduled' : berth.willOccupyAt;
-
-          return {
-            coach: berth.coachNo,
-            berthNo: berth.berthNo,
-            fullBerthNo: berth.fullBerthNo,
-            type: berth.type,
-            class: berth.class,
-            currentStation: stations[currentIdx]?.code || "N/A",
-            vacantFromStation: stations[currentIdx]?.code || "N/A", // Currently vacant
-            vacantToStation: willOccupyDisplay, // Show '—' instead of '-' for better visibility
-            vacantFromStationName: stations[currentIdx]?.name || "N/A",
-            vacantToStationName: willOccupyTitle
-          };
-        });
-
-        console.log('✅ TTE Portal - Processed vacant berths:', vacant);
+        console.log('✅ TTE Portal - Current station vacant berths:', vacant.length);
         setVacantBerths(vacant);
       } else {
         setVacantBerths([]);
       }
     } catch (error) {
       console.error('TTE Portal - Error fetching vacant berths:', error);
-      // Fallback to empty array
       setVacantBerths([]);
     }
   };
 
   const filterVacantBerths = () => {
-    let filtered = [...vacantBerths];
-
-    // Filter by "from" station
-    if (vacantFromStation.trim()) {
-      filtered = filtered.filter(
-        (berth) =>
-          berth.vacantFromStation
-            .toLowerCase()
-            .includes(vacantFromStation.toLowerCase()) ||
-          berth.vacantFromStationName
-            .toLowerCase()
-            .includes(vacantFromStation.toLowerCase()),
-      );
-    }
-
-    // Filter by "to" station
-    if (vacantToStation.trim()) {
-      filtered = filtered.filter(
-        (berth) =>
-          berth.vacantToStation
-            .toLowerCase()
-            .includes(vacantToStation.toLowerCase()) ||
-          berth.vacantToStationName
-            .toLowerCase()
-            .includes(vacantToStation.toLowerCase()),
-      );
-    }
-
-    setFilteredVacantBerths(filtered);
+    // For TTE Portal: Just display all current station vacant berths
+    // (Already filtered by isCurrentlyVacant in calculateVacantBerths)
+    setFilteredVacantBerths([...vacantBerths]);
   };
 
   const loadData = async () => {
@@ -211,7 +185,7 @@ function PassengersPage() {
     }
   };
 
-  const handleStatusUpdate = async (pnr, status) => {
+  const handleStatusUpdate = async () => {
     try {
       // TTE API doesn't have setPassengerStatus - skip for now
       alert('Status update not available in TTE portal yet');
@@ -230,6 +204,13 @@ function PassengersPage() {
     if (searchPNR.trim()) {
       filtered = filtered.filter((p) =>
         String(p.pnr).includes(searchPNR.trim()),
+      );
+    }
+
+    // Search by Coach
+    if (searchCoach.trim()) {
+      filtered = filtered.filter((p) =>
+        p.coach?.toLowerCase().includes(searchCoach.trim().toLowerCase()),
       );
     }
 
@@ -266,23 +247,7 @@ function PassengersPage() {
     setFilteredPassengers(filtered);
   };
 
-  const handleSearch = async () => {
-    if (!searchPNR.trim()) {
-      alert("Please enter a PNR");
-      return;
-    }
-
-    // Just filter locally
-    const found = passengers.find(p => String(p.pnr) === searchPNR.trim());
-    if (found) {
-      const p = found;
-      alert(
-        `Passenger Found:\n\nName: ${p.name}\nPNR: ${p.pnr}\nStatus: ${p.pnrStatus}\nAge/Gender: ${p.age}/${p.gender}\nClass: ${p.class}\nFrom: ${p.from} → To: ${p.to}\nCoach-Berth: ${p.berth}\nBoarded: ${p.boarded ? "Yes" : "No"}\nNo-Show: ${p.noShow ? "Yes" : "No"}`,
-      );
-    } else {
-      alert("Passenger not found");
-    }
-  };
+  // Search functionality handled via searchPNR state changes and applyFilters
 
   if (loading) {
     return (
@@ -340,35 +305,58 @@ function PassengersPage() {
         </div>
       )}
 
-      {/* Search Box */}
-      <div style={{ marginBottom: '15px' }}>
-        <input
-          type="text"
-          placeholder="🔍 Search by PNR..."
-          value={searchPNR}
-          onChange={(e) => setSearchPNR(e.target.value)}
-          style={{
-            width: '100%',
-            maxWidth: '400px',
-            padding: '10px 15px',
-            border: '2px solid #e1e8ed',
-            borderRadius: '6px',
-            fontSize: '14px',
-            outline: 'none',
-            transition: 'border-color 0.2s ease',
-          }}
-          onFocus={(e) => e.target.style.borderColor = '#3498db'}
-          onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
-        />
-        {searchPNR && filteredPassengers.length > 0 && (
-          <span style={{ marginLeft: '10px', fontSize: '13px', color: '#5a6c7d' }}>
-            {filteredPassengers.length} result(s)
-          </span>
-        )}
-      </div>
+      {/* Search Boxes - Only show when viewing passengers */}
+      {!showVacantBerths && (
+        <div style={{ marginBottom: '15px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search by PNR..."
+              value={searchPNR}
+              onChange={(e) => setSearchPNR(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '300px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            <input
+              type="text"
+              placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+              value={searchCoach}
+              onChange={(e) => setSearchCoach(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '300px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+              <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
+                {filteredPassengers.length} result(s)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* Filter Options */}
-      <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      {/* Filter Options - Only show when viewing passengers */}
+      {!showVacantBerths && (
+        <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
         <button onClick={() => setFilterStatus("all")} style={{ padding: '8px 20px', background: filterStatus === "all" ? '#3498db' : '#ecf0f1', color: filterStatus === "all" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "all" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
           All ({counts?.total || 0})
         </button>
@@ -387,7 +375,8 @@ function PassengersPage() {
         <button onClick={() => setFilterStatus("upcoming")} style={{ padding: '8px 20px', background: filterStatus === "upcoming" ? '#1abc9c' : '#ecf0f1', color: filterStatus === "upcoming" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "upcoming" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
           Upcoming
         </button>
-      </div>
+        </div>
+      )}
 
       {/* Vacant Berths Toggle Button - Separate Row */}
       {trainData && trainData.journeyStarted && (
@@ -396,7 +385,7 @@ function PassengersPage() {
             onClick={() => setShowVacantBerths(!showVacantBerths)}
             className="vacant-toggle-btn"
           >
-            {showVacantBerths ? "👥 Show Passengers" : "🛏️ Show Vacant Berths"}
+            {showVacantBerths ? "👥 View Passengers List " : "🛏️ View Vacant Berths"}
             {!showVacantBerths && (
               <span className="toggle-count">
                 ({vacantBerths.length} vacant at{" "}
@@ -409,7 +398,7 @@ function PassengersPage() {
 
       {/* Vacant Berths Section */}
       {showVacantBerths && trainData && trainData.journeyStarted && (
-        <div className="vacant-berths-section">
+        <div className="vacant-berths-section" style={{ marginTop: '30px' }}>
           <div className="section-header">
             <h3>
               🛏️ Vacant Berths at{" "}
@@ -487,25 +476,13 @@ function PassengersPage() {
                           <td className="td-type">{berth.type}</td>
                           <td className="td-class">{berth.class}</td>
                           <td className="td-station">
-                            <span className="station-code current">
-                              {berth.currentStation}
-                            </span>
+                            {berth.currentStation}
                           </td>
                           <td className="td-station">
-                            <span
-                              className="station-code vacant-from"
-                              title={berth.vacantFromStationName}
-                            >
-                              {berth.vacantFromStation}
-                            </span>
+                            {berth.vacantFromStation}
                           </td>
                           <td className="td-station">
-                            <span
-                              className="station-code vacant-to"
-                              title={berth.vacantToStationName}
-                            >
-                              {berth.vacantToStation}
-                            </span>
+                            {berth.vacantToStation}
                           </td>
                         </tr>
                       ))}
@@ -515,20 +492,6 @@ function PassengersPage() {
               )}
             </>
           )}
-
-          {/* Add Passenger Button - Always visible at bottom of vacant berths section */}
-          <div className="add-passenger-button-container">
-            <button
-              onClick={() => onNavigate("add-passenger")}
-              className="btn-add-passenger-bottom"
-              title="Add a new passenger to vacant berths"
-            >
-              ➕ Add New Passenger
-            </button>
-            <p className="add-passenger-hint">
-              Check vacant berths above and add passengers to available berths
-            </p>
-          </div>
         </div>
       )}
 

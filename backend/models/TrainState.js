@@ -1,5 +1,5 @@
 // backend/models/TrainState.js
-// Last updated: 2025-11-28 10:56 - Fixed vacant berths count (now checks segment occupancy)
+// Last updated: 2025-11-28 11:34 - Implemented ALL vacant segments across journey
 
 const Berth = require('./Berth');
 const SegmentMatrix = require('./SegmentMatrix');
@@ -245,50 +245,41 @@ class TrainState {
   }
 
   /**
-   * Get vacant berths with next occupation information
+   * Get ALL vacant berth segments across the ENTIRE journey
+   * Returns all vacant ranges for all berths (same berth can appear multiple times)
    */
   getVacantBerths() {
     const vacant = [];
     const currentIdx = this.currentStationIdx;
 
-    console.log(`\n🔍 Getting vacant berths at station index ${currentIdx}`);
+    console.log(`\n🔍 Getting ALL vacant berth segments across entire journey (current station index: ${currentIdx})`);
 
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
-        // Check if berth is vacant at CURRENT STATION (using segment occupancy)
-        const passengersAtCurrentSegment = berth.segmentOccupancy[currentIdx] || [];
+        // Find ALL vacant segment ranges for this berth (not just current)
+        const vacantRanges = this._findAllVacantRanges(berth);
 
-        if (passengersAtCurrentSegment.length === 0) {
-          // Find when this berth will next be occupied
-          let nextOccupationStation = null;
-          let nextOccupationStationIdx = Infinity;
+        // For each vacant range, create a row
+        vacantRanges.forEach(range => {
+          // Find who will occupy this berth at the END of this vacant range
+          let willOccupyAt = 'Journey End';
+          let willOccupyAtCode = '-';
+          let nextPassenger = null;
 
-          console.log(`   📍 Vacant Berth: ${berth.fullBerthNo}, Total Passengers: ${berth.passengers.length}`);
-
-          // Check all passengers on this berth
+          // Check passengers who board exactly at range.toIdx
           berth.passengers.forEach(passenger => {
-            console.log(`      - Passenger ${passenger.pnr}: from=${passenger.from} (idx=${passenger.fromIdx}), boarded=${passenger.boarded}, noShow=${passenger.noShow}`);
+            if (passenger.boarded || passenger.noShow) return;
 
-            // Skip already boarded or no-show passengers
-            if (passenger.boarded || passenger.noShow) {
-              console.log(`        → Skipped (already boarded or no-show)`);
-              return;
-            }
-
-            // Find passengers who will board at future stations
-            if (passenger.fromIdx > currentIdx && passenger.fromIdx < nextOccupationStationIdx) {
-              nextOccupationStationIdx = passenger.fromIdx;
-              nextOccupationStation = passenger.from; // Station code where they board
-              console.log(`        → ✅ NEXT BOARDER: ${passenger.from} at index ${passenger.fromIdx}`);
-            } else {
-              console.log(`        → Not future boarder (fromIdx=${passenger.fromIdx}, current=${currentIdx})`);
+            if (passenger.fromIdx === range.toIdx) {
+              // Get station name for this boarding point
+              const station = this.stations[passenger.fromIdx];
+              willOccupyAt = station?.name || passenger.from;
+              willOccupyAtCode = passenger.from; // Keep code for tooltip
+              nextPassenger = passenger.pnr;
             }
           });
 
-          // If no station found, it means berth stays vacant till end
-          const willOccupyAt = nextOccupationStation || '-';
-
-          console.log(`   ✨ Result: willOccupyAt = "${willOccupyAt}"\n`);
+          console.log(`   📍 Berth: ${berth.fullBerthNo}, Vacant: ${range.fromStation} → ${range.toStation}, Will occupy: ${willOccupyAt}`);
 
           vacant.push({
             coachNo: coach.coachNo,
@@ -296,16 +287,77 @@ class TrainState {
             fullBerthNo: berth.fullBerthNo,
             type: berth.type,
             class: coach.class,
-            vacantSegments: berth.getVacantSegments(),
-            willOccupyAt: willOccupyAt, // NEW: Station where berth will next be occupied
-            nextOccupationStationIdx: nextOccupationStationIdx === Infinity ? null : nextOccupationStationIdx
+            vacantFromStation: range.fromStation,      // Station NAME
+            vacantToStation: range.toStation,          // Station NAME  
+            vacantFromStationCode: range.fromStationCode, // Code for tooltip
+            vacantToStationCode: range.toStationCode,     // Code for tooltip
+            vacantFromIdx: range.fromIdx,
+            vacantToIdx: range.toIdx,
+            willOccupyAt: willOccupyAt,                // Station NAME
+            willOccupyAtCode: willOccupyAtCode,        // Code for tooltip
+            nextPassengerPNR: nextPassenger,
+            isCurrentlyVacant: range.fromIdx <= currentIdx && currentIdx < range.toIdx // Is it vacant NOW?
           });
-        }
+        });
       });
     });
 
-    console.log(`✅ Total vacant berths: ${vacant.length}\n`);
+    console.log(`✅ Total vacant segments: ${vacant.length}\n`);
     return vacant;
+  }
+
+  /**
+   * Helper: Find ALL vacant segment ranges for a berth across entire journey
+   */
+  _findAllVacantRanges(berth) {
+    const ranges = [];
+    let rangeStart = null;
+
+    for (let i = 0; i < berth.segmentOccupancy.length; i++) {
+      const passengersAtSegment = berth.segmentOccupancy[i] || [];
+
+      if (passengersAtSegment.length === 0) {
+        // Segment is vacant
+        if (rangeStart === null) {
+          rangeStart = i; // Start of vacant range
+        }
+      } else {
+        // Segment is occupied
+        if (rangeStart !== null) {
+          // End of vacant range
+          ranges.push({
+            fromIdx: rangeStart,
+            toIdx: i,
+            fromStation: this.stations[rangeStart]?.name || this.stations[rangeStart]?.code || `Station ${rangeStart}`,
+            toStation: this.stations[i]?.name || this.stations[i]?.code || `Station ${i}`,
+            fromStationCode: this.stations[rangeStart]?.code || `S${rangeStart}`,
+            toStationCode: this.stations[i]?.code || `S${i}`
+          });
+          rangeStart = null;
+        }
+      }
+    }
+
+    // Handle final range that extends to end of journey
+    if (rangeStart !== null) {
+      const endName = berth.segmentOccupancy.length < this.stations.length ?
+        (this.stations[berth.segmentOccupancy.length]?.name || 'Journey End') :
+        'Journey End';
+      const endCode = berth.segmentOccupancy.length < this.stations.length ?
+        (this.stations[berth.segmentOccupancy.length]?.code || 'END') :
+        'END';
+
+      ranges.push({
+        fromIdx: rangeStart,
+        toIdx: berth.segmentOccupancy.length,
+        fromStation: this.stations[rangeStart]?.name || this.stations[rangeStart]?.code || `Station ${rangeStart}`,
+        toStation: endName,
+        fromStationCode: this.stations[rangeStart]?.code || `S${rangeStart}`,
+        toStationCode: endCode
+      });
+    }
+
+    return ranges;
   }
 
   /**

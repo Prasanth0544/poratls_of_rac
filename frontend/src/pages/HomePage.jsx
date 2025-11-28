@@ -222,7 +222,7 @@ function HomePage({
             onClick={() => onNavigate('passengers')}
           >
             <span className="nav-icon">👥</span>
-            <span className="nav-text">Passenger List</span>
+            <span className="nav-text">Passenger List & Vacant Positions </span>
           </div>
 
           <div

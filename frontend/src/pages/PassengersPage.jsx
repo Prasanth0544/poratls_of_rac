@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import {
   getAllPassengers,
   getPassengerCounts,
-  searchPassenger,
   setPassengerStatus,
 } from "../services/api";
 import "./PassengersPage.css";
@@ -59,7 +58,7 @@ function PassengerStatusButton({ passenger, onStatusUpdate }) {
     <button
       onClick={() => setShowButtons(true)}
       disabled={isUpdating}
-      className={`current-status-btn ${currentStatus.toLowerCase()}`}
+      className={`current - status - btn ${currentStatus.toLowerCase()} `}
     >
       {currentStatus}
     </button>
@@ -107,19 +106,14 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
       const response = await fetch('http://localhost:5000/api/train/vacant-berths');
       const data = await response.json();
 
-      console.log('🔍 Vacant Berths API Response:', data);
+      console.log('🔍 Vacant Berths API Response (ALL segments):', data);
 
       if (data.success && data.data && data.data.vacancies) {
-        const currentIdx = trainData.currentStationIdx;
-        const stations = trainData.stations;
-
-        // Transform backend data to match the frontend format
+        // Backend now returns ALL vacant segments with fromStation and toStation
         const vacant = data.data.vacancies.map(berth => {
-          console.log('📦 Berth data:', berth.fullBerthNo, 'willOccupyAt:', berth.willOccupyAt);
-
-          // Determine display value for "Will Occupy At"
-          const willOccupyDisplay = berth.willOccupyAt === '-' ? '—' : berth.willOccupyAt;
-          const willOccupyTitle = berth.willOccupyAt === '-' ? 'No passenger scheduled' : berth.willOccupyAt;
+          console.log('📦 Berth segment:', berth.fullBerthNo,
+            `${berth.vacantFromStation} → ${berth.vacantToStation} `,
+            'willOccupyAt:', berth.willOccupyAt);
 
           return {
             coach: berth.coachNo,
@@ -127,15 +121,19 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             fullBerthNo: berth.fullBerthNo,
             type: berth.type,
             class: berth.class,
-            currentStation: stations[currentIdx]?.code || "N/A",
-            vacantFromStation: stations[currentIdx]?.code || "N/A", // Currently vacant
-            vacantToStation: willOccupyDisplay, // Show '—' instead of '-' for better visibility
-            vacantFromStationName: stations[currentIdx]?.name || "N/A",
-            vacantToStationName: willOccupyTitle
+            currentStation: trainData.stations[trainData.currentStationIdx]?.name || "N/A",
+            currentStationCode: trainData.stations[trainData.currentStationIdx]?.code || "",
+            vacantFromStation: berth.vacantFromStation,  // Station NAME
+            vacantToStation: berth.vacantToStation,      // Station NAME
+            willOccupyAt: berth.willOccupyAt,           // Station NAME
+            vacantFromStationCode: berth.vacantFromStationCode || berth.vacantFromStation,  // For tooltip
+            vacantToStationCode: berth.vacantToStationCode || berth.vacantToStation,        // For tooltip
+            willOccupyAtCode: berth.willOccupyAtCode || berth.willOccupyAt,                // For tooltip
+            isCurrentlyVacant: berth.isCurrentlyVacant   // Is vacant NOW?
           };
         });
 
-        console.log('✅ Processed vacant berths:', vacant);
+        console.log('✅ Processed vacant segments:', vacant.length);
         setVacantBerths(vacant);
       } else {
         setVacantBerths([]);
@@ -150,29 +148,23 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
   const filterVacantBerths = () => {
     let filtered = [...vacantBerths];
 
-    // Filter by "from" station
+    // Filter by "from" station (check both code and name, case-insensitive)
     if (vacantFromStation.trim()) {
+      const searchTerm = vacantFromStation.toLowerCase();
       filtered = filtered.filter(
         (berth) =>
-          berth.vacantFromStation
-            .toLowerCase()
-            .includes(vacantFromStation.toLowerCase()) ||
-          berth.vacantFromStationName
-            .toLowerCase()
-            .includes(vacantFromStation.toLowerCase()),
+          berth.vacantFromStation?.toLowerCase().includes(searchTerm) ||
+          berth.vacantFromStationName?.toLowerCase().includes(searchTerm)
       );
     }
 
-    // Filter by "to" station
+    // Filter by "to" station (check both code and name, case-insensitive)
     if (vacantToStation.trim()) {
+      const searchTerm = vacantToStation.toLowerCase();
       filtered = filtered.filter(
         (berth) =>
-          berth.vacantToStation
-            .toLowerCase()
-            .includes(vacantToStation.toLowerCase()) ||
-          berth.vacantToStationName
-            .toLowerCase()
-            .includes(vacantToStation.toLowerCase()),
+          berth.vacantToStation?.toLowerCase().includes(searchTerm) ||
+          berth.vacantToStationName?.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -265,26 +257,6 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     setFilteredPassengers(filtered);
   };
 
-  const handleSearch = async () => {
-    if (!searchPNR.trim()) {
-      alert("Please enter a PNR");
-      return;
-    }
-
-    try {
-      const response = await searchPassenger(searchPNR.trim());
-
-      if (response.success) {
-        const p = response.data;
-        alert(
-          `Passenger Found:\n\nName: ${p.name}\nPNR: ${p.pnr}\nStatus: ${p.pnrStatus}\nAge/Gender: ${p.age}/${p.gender}\nClass: ${p.class}\nFrom: ${p.from} → To: ${p.to}\nCoach-Berth: ${p.berth}\nBoarded: ${p.boarded ? "Yes" : "No"}\nNo-Show: ${p.noShow ? "Yes" : "No"}`,
-        );
-      }
-    } catch (error) {
-      alert(error.message || "Passenger not found");
-    }
-  };
-
   if (loading) {
     return (
       <div className="passengers-page">
@@ -325,7 +297,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
           ◄
         </button>
         <h2>
-          👥 Passenger List ({counts ? counts.total : passengers.length} total)
+          👥 Passenger List & Vacant Positions ({counts ? counts.total : passengers.length} total)
         </h2>
       </div>
 
@@ -363,89 +335,93 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
         </div>
       )}
 
-      {/* Search Boxes */}
-      <div style={{ marginBottom: '15px' }}>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="🔍 Search by PNR..."
-            value={searchPNR}
-            onChange={(e) => setSearchPNR(e.target.value)}
-            style={{
-              width: '100%',
-              maxWidth: '300px',
-              padding: '10px 15px',
-              border: '2px solid #e1e8ed',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s ease',
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#3498db'}
-            onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
-          />
-          <input
-            type="text"
-            placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
-            value={searchCoach}
-            onChange={(e) => setSearchCoach(e.target.value)}
-            style={{
-              width: '100%',
-              maxWidth: '300px',
-              padding: '10px 15px',
-              border: '2px solid #e1e8ed',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s ease',
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#3498db'}
-            onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
-          />
-          {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
-            <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
-              {filteredPassengers.length} result(s)
-            </span>
-          )}
+      {/* Search Boxes - Only show when viewing passengers */}
+      {!showVacantBerths && (
+        <div style={{ marginBottom: '15px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search by PNR..."
+              value={searchPNR}
+              onChange={(e) => setSearchPNR(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '300px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            <input
+              type="text"
+              placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+              value={searchCoach}
+              onChange={(e) => setSearchCoach(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '300px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+              <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
+                {filteredPassengers.length} result(s)
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Filter Options */}
-      <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <button onClick={() => setFilterStatus("all")} style={{ padding: '8px 20px', background: filterStatus === "all" ? '#3498db' : '#ecf0f1', color: filterStatus === "all" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "all" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          All ({counts?.total || 0})
-        </button>
-        <button onClick={() => setFilterStatus("cnf")} style={{ padding: '8px 20px', background: filterStatus === "cnf" ? '#27ae60' : '#ecf0f1', color: filterStatus === "cnf" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "cnf" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          CNF ({counts?.cnf || 0})
-        </button>
-        <button onClick={() => setFilterStatus("rac")} style={{ padding: '8px 20px', background: filterStatus === "rac" ? '#f39c12' : '#ecf0f1', color: filterStatus === "rac" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "rac" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          RAC ({counts?.rac || 0})
-        </button>
-        <button onClick={() => setFilterStatus("boarded")} style={{ padding: '8px 20px', background: filterStatus === "boarded" ? '#9b59b6' : '#ecf0f1', color: filterStatus === "boarded" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "boarded" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          Boarded ({counts?.boarded || 0})
-        </button>
-        <button onClick={() => setFilterStatus("no-show")} style={{ padding: '8px 20px', background: filterStatus === "no-show" ? '#e74c3c' : '#ecf0f1', color: filterStatus === "no-show" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "no-show" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          No-Show ({counts?.noShow || 0})
-        </button>
-        <button onClick={() => setFilterStatus("online")} style={{ padding: '8px 20px', background: filterStatus === "online" ? '#16a085' : '#ecf0f1', color: filterStatus === "online" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "online" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          Online ({counts?.online || 0})
-        </button>
-        <button onClick={() => setFilterStatus("offline")} style={{ padding: '8px 20px', background: filterStatus === "offline" ? '#7f8c8d' : '#ecf0f1', color: filterStatus === "offline" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "offline" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          Offline ({counts?.offline || 0})
-        </button>
-        <button onClick={() => setFilterStatus("upcoming")} style={{ padding: '8px 20px', background: filterStatus === "upcoming" ? '#1abc9c' : '#ecf0f1', color: filterStatus === "upcoming" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "upcoming" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
-          Upcoming
-        </button>
-      </div>
+      {/* Filter Options - Only show when viewing passengers */}
+      {!showVacantBerths && (
+        <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={() => setFilterStatus("all")} style={{ padding: '8px 20px', background: filterStatus === "all" ? '#3498db' : '#ecf0f1', color: filterStatus === "all" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "all" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            All ({counts?.total || 0})
+          </button>
+          <button onClick={() => setFilterStatus("cnf")} style={{ padding: '8px 20px', background: filterStatus === "cnf" ? '#27ae60' : '#ecf0f1', color: filterStatus === "cnf" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "cnf" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            CNF ({counts?.cnf || 0})
+          </button>
+          <button onClick={() => setFilterStatus("rac")} style={{ padding: '8px 20px', background: filterStatus === "rac" ? '#f39c12' : '#ecf0f1', color: filterStatus === "rac" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "rac" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            RAC ({counts?.rac || 0})
+          </button>
+          <button onClick={() => setFilterStatus("boarded")} style={{ padding: '8px 20px', background: filterStatus === "boarded" ? '#9b59b6' : '#ecf0f1', color: filterStatus === "boarded" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "boarded" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            Boarded ({counts?.boarded || 0})
+          </button>
+          <button onClick={() => setFilterStatus("no-show")} style={{ padding: '8px 20px', background: filterStatus === "no-show" ? '#e74c3c' : '#ecf0f1', color: filterStatus === "no-show" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "no-show" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            No-Show ({counts?.noShow || 0})
+          </button>
+          <button onClick={() => setFilterStatus("online")} style={{ padding: '8px 20px', background: filterStatus === "online" ? '#16a085' : '#ecf0f1', color: filterStatus === "online" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "online" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            Online ({counts?.online || 0})
+          </button>
+          <button onClick={() => setFilterStatus("offline")} style={{ padding: '8px 20px', background: filterStatus === "offline" ? '#7f8c8d' : '#ecf0f1', color: filterStatus === "offline" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "offline" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            Offline ({counts?.offline || 0})
+          </button>
+          <button onClick={() => setFilterStatus("upcoming")} style={{ padding: '8px 20px', background: filterStatus === "upcoming" ? '#1abc9c' : '#ecf0f1', color: filterStatus === "upcoming" ? 'white' : '#2c3e50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: filterStatus === "upcoming" ? '600' : '500', fontSize: '13px', transition: 'all 0.2s ease' }}>
+            Upcoming
+          </button>
+        </div>
+      )}
 
       {/* Vacant Berths Toggle Button - Separate Row */}
       {trainData && trainData.journeyStarted && (
-        <div className="vacant-toggle-section">
+        <div className="vacant-toggle-section" style={{ marginTop: '30px' }}>
           <button
             onClick={() => setShowVacantBerths(!showVacantBerths)}
             className="vacant-toggle-btn"
           >
-            {showVacantBerths ? "👥 Show Passengers" : "🛏️ Show Vacant Berths"}
+            {showVacantBerths ? "👥 Show Passengers" : " Show Vacant Berths"}
             {!showVacantBerths && (
               <span className="toggle-count">
                 ({vacantBerths.length} vacant at{" "}
@@ -458,13 +434,12 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
 
       {/* Vacant Berths Section */}
       {showVacantBerths && trainData && trainData.journeyStarted && (
-        <div className="vacant-berths-section">
+        <div className="vacant-berths-section" style={{ marginTop: '20px' }}>
           <div className="section-header">
             <h3>
-              🛏️ Vacant Berths at{" "}
-              {trainData.stations[trainData.currentStationIdx]?.name}
+              All Vacant Berth Segments Across Entire Journey
             </h3>
-            <span className="badge-count">{vacantBerths.length} vacant</span>
+            <span className="badge-count">{vacantBerths.length} segments</span>
           </div>
 
           {/* Vacant Berths Filter */}
@@ -474,14 +449,14 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
               <div className="vacant-filter-inputs">
                 <input
                   type="text"
-                  placeholder="From Station: (Enter: station code/name)"
+                  placeholder="From Station: (Enter: Station Name/Code)"
                   value={vacantFromStation}
                   onChange={(e) => setVacantFromStation(e.target.value)}
                   className="vacant-filter-input"
                 />
                 <input
                   type="text"
-                  placeholder="To Station: (Enter: station code/name)"
+                  placeholder="To Station: (Enter: Station Name/Code)"
                   value={vacantToStation}
                   onChange={(e) => setVacantToStation(e.target.value)}
                   className="vacant-filter-input"
@@ -502,7 +477,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
 
           {vacantBerths.length === 0 ? (
             <div className="empty-state">
-              <p>✅ All berths are occupied at this station!</p>
+              <p>✅ No vacant segments found for any berths across the entire journey!</p>
             </div>
           ) : (
             <>
@@ -514,7 +489,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                 <div className="table-container">
                   <div className="filter-result-info">
                     Showing <strong>{filteredVacantBerths.length}</strong> of{" "}
-                    <strong>{vacantBerths.length}</strong> vacant berths
+                    <strong>{vacantBerths.length}</strong> vacant segments
                   </div>
                   <table className="vacant-berths-table">
                     <thead>
@@ -525,36 +500,38 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                         <th>Class</th>
                         <th>Current Station</th>
                         <th>Vacant From</th>
+                        <th>Vacant To</th>
                         <th>Will Occupy At</th>
+                        <th>Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredVacantBerths.map((berth, idx) => (
-                        <tr key={berth.fullBerthNo}>
+                        <tr key={`${berth.fullBerthNo} -${idx} `} style={{
+                          backgroundColor: berth.isCurrentlyVacant ? '#f0f9ff' : '#fff'
+                        }}>
                           <td className="td-no">{idx + 1}</td>
                           <td className="td-berth">{berth.fullBerthNo}</td>
                           <td className="td-type">{berth.type}</td>
                           <td className="td-class">{berth.class}</td>
-                          <td className="td-station">
-                            <span className="station-code current">
-                              {berth.currentStation}
-                            </span>
+                          <td className="td-station" style={{ textAlign: 'left' }}>
+                            {berth.currentStation}
                           </td>
-                          <td className="td-station">
-                            <span
-                              className="station-code vacant-from"
-                              title={berth.vacantFromStationName}
-                            >
-                              {berth.vacantFromStation}
-                            </span>
+                          <td className="td-station" style={{ textAlign: 'left' }}>
+                            {berth.vacantFromStation}
                           </td>
-                          <td className="td-station">
-                            <span
-                              className="station-code vacant-to"
-                              title={berth.vacantToStationName}
-                            >
-                              {berth.vacantToStation}
-                            </span>
+                          <td className="td-station" style={{ textAlign: 'left' }}>
+                            {berth.vacantToStation}
+                          </td>
+                          <td className="td-station" style={{ textAlign: 'left' }}>
+                            {berth.willOccupyAt}
+                          </td>
+                          <td className="td-status">
+                            {berth.isCurrentlyVacant ? (
+                              <span className="badge" style={{ background: '#10b981', color: 'white' }}>NOW</span>
+                            ) : (
+                              <span className="badge" style={{ background: '#94a3b8', color: 'white' }}>FUTURE</span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -618,7 +595,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                       <td className="td-gender">{p.gender}</td>
                       <td className="td-status">
                         <span
-                          className={`badge ${p.pnrStatus.toLowerCase().replace(" ", "-")}`}
+                          className={`badge ${p.pnrStatus.toLowerCase().replace(" ", "-")} `}
                         >
                           {p.pnrStatus}
                         </span>
