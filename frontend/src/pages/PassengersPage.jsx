@@ -74,12 +74,14 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
 
   const [searchPNR, setSearchPNR] = useState("");
   const [searchCoach, setSearchCoach] = useState(""); // NEW: Coach filter
+  const [filterFromStation, setFilterFromStation] = useState(""); // Passenger From Station filter
+  const [filterToStation, setFilterToStation] = useState(""); // Passenger To Station filter
   const [filterStatus, setFilterStatus] = useState("all");
   const [showVacantBerths, setShowVacantBerths] = useState(false);
   const [vacantBerths, setVacantBerths] = useState([]);
   const [filteredVacantBerths, setFilteredVacantBerths] = useState([]);
-  const [vacantFromStation, setVacantFromStation] = useState("");
-  const [vacantToStation, setVacantToStation] = useState("");
+  const [vacantFromStation, setVacantFromStation] = useState(""); // Vacant berths From Station filter
+  const [vacantToStation, setVacantToStation] = useState(""); // Vacant berths To Station filter
 
   useEffect(() => {
     loadData();
@@ -89,7 +91,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     applyFilters();
     calculateVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passengers, searchPNR, filterStatus, trainData]);
+  }, [passengers, searchPNR, searchCoach, filterFromStation, filterToStation, filterStatus, trainData]);
 
   useEffect(() => {
     filterVacantBerths();
@@ -226,6 +228,30 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
       );
     }
 
+    // Filter by From Station (match both code and name, case-insensitive)
+    if (filterFromStation.trim()) {
+      const searchTerm = filterFromStation.toLowerCase();
+      filtered = filtered.filter((p) => {
+        const fromCode = p.from?.toLowerCase() || '';
+        // Try to find station name from trainData
+        const fromStation = trainData?.stations?.find(s => s.code === p.from);
+        const fromName = fromStation?.name?.toLowerCase() || '';
+        return fromCode.includes(searchTerm) || fromName.includes(searchTerm);
+      });
+    }
+
+    // Filter by To Station (match both code and name, case-insensitive)
+    if (filterToStation.trim()) {
+      const searchTerm = filterToStation.toLowerCase();
+      filtered = filtered.filter((p) => {
+        const toCode = p.to?.toLowerCase() || '';
+        // Try to find station name from trainData
+        const toStation = trainData?.stations?.find(s => s.code === p.to);
+        const toName = toStation?.name?.toLowerCase() || '';
+        return toCode.includes(searchTerm) || toName.includes(searchTerm);
+      });
+    }
+
     // Filter by status
     switch (filterStatus) {
       case "cnf":
@@ -348,7 +374,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
               onChange={(e) => setSearchPNR(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '200px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -361,12 +387,12 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             />
             <input
               type="text"
-              placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+              placeholder="🚂 Coach (e.g., S1)..."
               value={searchCoach}
               onChange={(e) => setSearchCoach(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '150px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -377,10 +403,83 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
               onFocus={(e) => e.target.style.borderColor = '#3498db'}
               onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
             />
-            {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+            <select
+              value={filterFromStation}
+              onChange={(e) => setFilterFromStation(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '200px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                cursor: 'pointer',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            >
+              <option value="">🚉 From Station (All)</option>
+              {trainData?.stations?.map((station) => (
+                <option key={station.code} value={station.code}>
+                  {station.name} ({station.code})
+                </option>
+              ))}
+            </select>
+            <select
+              value={filterToStation}
+              onChange={(e) => setFilterToStation(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '200px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                cursor: 'pointer',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            >
+              <option value="">🎯 To Station (All)</option>
+              {trainData?.stations?.map((station) => (
+                <option key={station.code} value={station.code}>
+                  {station.name} ({station.code})
+                </option>
+              ))}
+            </select>
+            {(searchPNR || searchCoach || filterFromStation || filterToStation) && filteredPassengers.length > 0 && (
               <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
                 {filteredPassengers.length} result(s)
               </span>
+            )}
+            {(searchPNR || searchCoach || filterFromStation || filterToStation) && (
+              <button
+                onClick={() => {
+                  setSearchPNR('');
+                  setSearchCoach('');
+                  setFilterFromStation('');
+                  setFilterToStation('');
+                }}
+                style={{
+                  padding: '10px 15px',
+                  background: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'background 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#c0392b'}
+                onMouseLeave={(e) => e.target.style.background = '#e74c3c'}
+              >
+                ✕ Clear All
+              </button>
             )}
           </div>
         </div>
@@ -447,32 +546,80 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
           {/* Vacant Berths Filter */}
           <div className="vacant-filters">
             <div className="vacant-filter-group">
-              <label className="filter-label">🔍 Filter by Stations</label>
-              <div className="vacant-filter-inputs">
-                <input
-                  type="text"
-                  placeholder="From Station: (Enter: Station Name/Code)"
+              <label className="filter-label">🔍 Filter Vacant Berths by Stations</label>
+              <div className="vacant-filter-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                <select
                   value={vacantFromStation}
                   onChange={(e) => setVacantFromStation(e.target.value)}
-                  className="vacant-filter-input"
-                />
-                <input
-                  type="text"
-                  placeholder="To Station: (Enter: Station Name/Code)"
+                  style={{
+                    width: '100%',
+                    maxWidth: '250px',
+                    padding: '10px 15px',
+                    border: '2px solid #e1e8ed',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3498db'}
+                  onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+                >
+                  <option value="">🚉 From Station (All)</option>
+                  {trainData?.stations?.map((station) => (
+                    <option key={station.code} value={station.code}>
+                      {station.name} ({station.code})
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={vacantToStation}
                   onChange={(e) => setVacantToStation(e.target.value)}
-                  className="vacant-filter-input"
-                />
-                <button
-                  onClick={() => {
-                    setVacantFromStation("");
-                    setVacantToStation("");
+                  style={{
+                    width: '100%',
+                    maxWidth: '250px',
+                    padding: '10px 15px',
+                    border: '2px solid #e1e8ed',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease',
+                    cursor: 'pointer',
                   }}
-                  className="vacant-filter-reset"
-                  title="Clear Filters"
+                  onFocus={(e) => e.target.style.borderColor = '#3498db'}
+                  onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
                 >
-                  ✕ Clear
-                </button>
+                  <option value="">🎯 To Station (All)</option>
+                  {trainData?.stations?.map((station) => (
+                    <option key={station.code} value={station.code}>
+                      {station.name} ({station.code})
+                    </option>
+                  ))}
+                </select>
+                {(vacantFromStation || vacantToStation) && (
+                  <button
+                    onClick={() => {
+                      setVacantFromStation('');
+                      setVacantToStation('');
+                    }}
+                    style={{
+                      padding: '10px 15px',
+                      background: '#e74c3c',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      transition: 'background 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#c0392b'}
+                    onMouseLeave={(e) => e.target.style.background = '#e74c3c'}
+                    title="Clear station filters"
+                  >
+                    ✕ Clear Filters
+                  </button>
+                )}
               </div>
             </div>
           </div>

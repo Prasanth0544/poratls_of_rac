@@ -60,6 +60,50 @@ class ReallocationService {
     return AllocationService.upgradeRACPassengerWithCoPassenger(racPNR, newBerthDetails, trainState);
   }
 
+  /**
+   * Get eligibility matrix - shows which RAC passengers are eligible for each vacant berth
+   */
+  getEligibilityMatrix(trainState) {
+    try {
+      const vacantSegments = VacancyService.getVacantSegments(trainState);
+      const currentStationIdx = trainState.currentStationIdx || 0;
+      const eligibilityMatrix = [];
+
+      vacantSegments.forEach((vacantSegment) => {
+        const eligiblePassengers = EligibilityService.getEligibleRACForVacantSegment(
+          vacantSegment,
+          currentStationIdx,
+          trainState
+        );
+
+        if (eligiblePassengers.length > 0) {
+          eligibilityMatrix.push({
+            berth: `${vacantSegment.coachNo}-${vacantSegment.berthNo}`,
+            coach: vacantSegment.coachNo,
+            berthNo: vacantSegment.berthNo,
+            type: vacantSegment.type,
+            berthType: vacantSegment.type,
+            class: vacantSegment.class,
+            vacantFrom: trainState.stations?.[vacantSegment.fromIdx]?.code || vacantSegment.from,
+            vacantTo: trainState.stations?.[vacantSegment.toIdx]?.code || vacantSegment.to,
+            vacantFromIdx: vacantSegment.fromIdx,
+            vacantToIdx: vacantSegment.toIdx,
+            vacantSegment: `${trainState.stations?.[vacantSegment.fromIdx]?.name || vacantSegment.from} → ${trainState.stations?.[vacantSegment.toIdx]?.name || vacantSegment.to}`,
+            eligibleRAC: eligiblePassengers,
+            eligibleCount: eligiblePassengers.length,
+            topEligible: eligiblePassengers[0], // Highest priority passenger
+            topCandidate: eligiblePassengers[0], // Compatibility field
+          });
+        }
+      });
+
+      return eligibilityMatrix;
+    } catch (error) {
+      console.error('Error generating eligibility matrix:', error);
+      return [];
+    }
+  }
+
   getRACStats(trainState) {
     return RACQueueService.getRACStats(trainState);
   }

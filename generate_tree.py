@@ -39,9 +39,6 @@ with open('PROJECT_STRUCTURE.md', 'w', encoding='utf-8') as f:
         except PermissionError:
             pass
 
-    # Use a separate function or pass file object to avoid global scope issues if any, 
-    # but for this simple script, just assigning to a global var or passing it is fine.
-    # Let's redefine print_tree to write to file.
     
     def print_tree_to_file(dir_path, file_obj, prefix=''):
         try:
