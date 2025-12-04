@@ -6,6 +6,7 @@ import "./OfflineUpgradesPage.css";
 
 function OfflineUpgradesPage() {
     const [passengers, setPassengers] = useState([]);
+    const [upgradedPassengers, setUpgradedPassengers] = useState([]); // From MongoDB
     const [loading, setLoading] = useState(true);
     const [currentStation, setCurrentStation] = useState("");
     const [filter, setFilter] = useState("all");
@@ -26,22 +27,46 @@ function OfflineUpgradesPage() {
         }
     };
 
+    // Fetch upgraded passengers from MongoDB (Upgraded_From = 'RAC')
+    const fetchUpgradedPassengers = async () => {
+        try {
+            const response = await tteAPI.getUpgradedPassengers();
+            if (response.success) {
+                setUpgradedPassengers(response.data.passengers || []);
+            }
+        } catch (error) {
+            console.error("Error fetching upgraded passengers:", error);
+        }
+    };
+
     useEffect(() => {
         fetchBoardedRACPassengers();
-        const interval = setInterval(fetchBoardedRACPassengers, 60000);
+        fetchUpgradedPassengers();
+        const interval = setInterval(() => {
+            fetchBoardedRACPassengers();
+            fetchUpgradedPassengers();
+        }, 60000);
         return () => clearInterval(interval);
     }, []);
 
-    const filteredPassengers = passengers.filter((p) => {
-        if (filter === "online") return p.passengerStatus?.toLowerCase() === "online";
-        if (filter === "offline") return p.passengerStatus?.toLowerCase() !== "online";
-        if (filter === "upgraded") return p.upgraded === true || p.pnrStatus === "CNF";
-        return true;
-    });
+    // Get the right list based on filter
+    const getFilteredList = () => {
+        if (filter === "upgraded") {
+            return upgradedPassengers; // From MongoDB
+        }
+        // For other filters, use the RAC queue passengers
+        return passengers.filter((p) => {
+            if (filter === "online") return p.passengerStatus?.toLowerCase() === "online";
+            if (filter === "offline") return p.passengerStatus?.toLowerCase() !== "online";
+            return true; // 'all'
+        });
+    };
+
+    const filteredPassengers = getFilteredList();
 
     const onlineCount = passengers.filter(p => p.passengerStatus?.toLowerCase() === "online").length;
     const offlineCount = passengers.filter(p => p.passengerStatus?.toLowerCase() !== "online").length;
-    const upgradedCount = passengers.filter(p => p.upgraded === true || p.pnrStatus === "CNF").length;
+    const upgradedCount = upgradedPassengers.length; // From MongoDB
 
     return (
         <div className="upgrades-page">
@@ -81,7 +106,7 @@ function OfflineUpgradesPage() {
                 <div className="empty-state">Loading RAC passengers...</div>
             ) : filteredPassengers.length === 0 ? (
                 <div className="empty-state">
-                    No {filter !== "all" ? filter : ""} RAC passengers at current station
+                    {filter === "upgraded" ? "No upgraded passengers yet" : `No ${filter !== "all" ? filter : ""} RAC passengers at current station`}
                 </div>
             ) : (
                 <div className="table-container">
@@ -94,7 +119,7 @@ function OfflineUpgradesPage() {
                                 <th>Age</th>
                                 <th>Gender</th>
                                 <th>Status</th>
-                                <th>RAC Number</th>
+                                <th>{filter === "upgraded" ? "New Berth" : "RAC Number"}</th>
                                 <th>Class</th>
                                 <th>From</th>
                                 <th>To</th>
@@ -115,7 +140,11 @@ function OfflineUpgradesPage() {
                                             {passenger.pnrStatus || "RAC"}
                                         </span>
                                     </td>
-                                    <td className="td-rac">{passenger.racStatus || "N/A"}</td>
+                                    <td className="td-rac">
+                                        {filter === "upgraded"
+                                            ? `${passenger.coach}-${passenger.berth}`
+                                            : (passenger.racStatus || "N/A")}
+                                    </td>
                                     <td className="td-class">{passenger.class || "N/A"}</td>
                                     <td>{passenger.from || "N/A"}</td>
                                     <td>{passenger.to || "N/A"}</td>
@@ -125,7 +154,7 @@ function OfflineUpgradesPage() {
                                         </span>
                                     </td>
                                     <td>
-                                        {passenger.upgraded || passenger.pnrStatus === "CNF" ? (
+                                        {passenger.upgradedFrom === "RAC" || passenger.pnrStatus === "CNF" ? (
                                             <span className="upgrade-badge upgraded">✅ Upgraded</span>
                                         ) : (
                                             <span className="upgrade-badge pending">Pending</span>
@@ -142,3 +171,4 @@ function OfflineUpgradesPage() {
 }
 
 export default OfflineUpgradesPage;
+

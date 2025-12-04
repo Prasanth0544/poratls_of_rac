@@ -67,6 +67,12 @@ class AllocationService {
       throw new Error(`Berth ${coach}-${berth} not found`);
     }
 
+    // ✅ COLLISION PREVENTION: Check if berth is actually available for this passenger's journey
+    const isAvailable = this._checkBerthAvailability(berthObj, passenger);
+    if (!isAvailable.available) {
+      throw new Error(`Berth ${coach}-${berth} collision: ${isAvailable.reason}`);
+    }
+
     // Allocate berth
     this._allocateBerth(passenger, berthObj, trainState);
 
@@ -116,12 +122,78 @@ class AllocationService {
     passenger.berthType = berth.type;    // Update berth type
     passenger.boarded = true;
 
-    // Update berth occupancy
+    // ✅ REMOVE from racQueue so they don't appear again at next station
+    const racIndex = trainState.racQueue.findIndex(r => r.pnr === passenger.pnr);
+    if (racIndex !== -1) {
+      trainState.racQueue.splice(racIndex, 1);
+      console.log(`   🗑️ Removed ${passenger.pnr} from RAC queue (${trainState.racQueue.length} remaining)`);
+    }
+
+    // Update berth occupancy (segmentOccupancy)
     for (let i = passenger.fromIdx; i < passenger.toIdx; i++) {
       berth.segmentOccupancy[i] = passenger.pnr;
     }
 
+    // ✅ ALSO add passenger to berth.passengers array for complete tracking
+    // This prevents collision issues where vacancy detection misses upgraded passengers
+    if (!berth.passengers.find(p => p.pnr === passenger.pnr)) {
+      berth.passengers.push({
+        pnr: passenger.pnr,
+        name: passenger.name,
+        age: passenger.age,
+        gender: passenger.gender,
+        fromIdx: passenger.fromIdx,
+        toIdx: passenger.toIdx,
+        from: passenger.from,
+        to: passenger.to,
+        pnrStatus: 'CNF',
+        class: passenger.class,
+        noShow: false,
+        boarded: true,
+        upgradedFrom: 'RAC'
+      });
+      console.log(`   ➕ Added ${passenger.pnr} to berth.passengers (${berth.passengers.length} in berth)`);
+    }
+
     berth.updateStatus();
+  }
+
+  /**
+   * Check if berth is available for passenger's journey
+   * @private
+   */
+  _checkBerthAvailability(berth, passenger) {
+    // Check segmentOccupancy for each segment of passenger's journey
+    for (let i = passenger.fromIdx; i < passenger.toIdx; i++) {
+      const occupant = berth.segmentOccupancy[i];
+
+      // If segment is occupied by another passenger, it's not available
+      if (occupant !== null && occupant !== undefined && occupant !== '' && occupant !== passenger.pnr) {
+        return {
+          available: false,
+          reason: `Segment ${i} already occupied by PNR ${occupant}`
+        };
+      }
+    }
+
+    // Also check passengers array for any overlapping journeys
+    for (const existingPassenger of berth.passengers) {
+      if (existingPassenger.pnr === passenger.pnr) continue; // Skip self
+      if (existingPassenger.noShow) continue; // Skip no-shows
+
+      // Check for journey overlap
+      const overlapStart = Math.max(passenger.fromIdx, existingPassenger.fromIdx);
+      const overlapEnd = Math.min(passenger.toIdx, existingPassenger.toIdx);
+
+      if (overlapStart < overlapEnd) {
+        return {
+          available: false,
+          reason: `Overlaps with ${existingPassenger.name} (${existingPassenger.pnr}) from station ${overlapStart} to ${overlapEnd}`
+        };
+      }
+    }
+
+    return { available: true };
   }
 
   /**
@@ -232,6 +304,80 @@ class AllocationService {
       return null;
     }
   }
+
+  /**
+   * Apply single upgrade (used by TTE approval flow)
+   * @param {string} pnr - Passenger PNR
+   * @param {string} berthId - Target berth ID (e.g., "S1-15")
+   * @param {TrainState} trainState
+   */
+  async applyUpgrade(pnr, berthId, trainState) {
+    try {
+      console.log(`\n🎫 Applying upgrade: ${pnr} → ${berthId}`);
+
+      // Parse berth ID
+      const [coachNo, berthNo] = berthId.split('-');
+
+      if (!coachNo || !berthNo) {
+        throw new Error(`Invalid berth ID format: ${berthId}`);
+      }
+
+      // Find the passenger
+      const passenger = trainState.findPassengerByPNR(pnr);
+      if (!passenger) {
+        throw new Error(`Passenger ${pnr} not found`);
+      }
+
+      // Check if passenger is still RAC
+      if (passenger.pnrStatus !== 'RAC' && passenger.PNR_Status !== 'RAC') {
+        throw new Error(`Passenger ${pnr} is no longer RAC (status: ${passenger.pnrStatus || passenger.PNR_Status})`);
+      }
+
+      // Find the berth
+      const berth = trainState.findBerth(coachNo, parseInt(berthNo));
+      if (!berth) {
+        throw new Error(`Berth ${berthId} not found`);
+      }
+
+      // Check berth availability
+      const availabilityCheck = this._checkBerthAvailability(berth, passenger);
+      if (!availabilityCheck.available) {
+        throw new Error(`Berth ${berthId} not available: ${availabilityCheck.reason}`);
+      }
+
+      // Allocate the berth
+      await this._allocateBerth(passenger, berth, trainState);
+
+      // Update database
+      await this._updateDatabase(pnr, coachNo, berthNo, berth.type);
+
+      // Update statistics
+      this._updateStats(trainState, passenger);
+
+      // Log the upgrade
+      trainState.logEvent('RAC_UPGRADED', `${pnr} upgraded to ${berthId}`, {
+        pnr,
+        berthId,
+        berthType: berth.type,
+        station: trainState.getCurrentStation()?.name
+      });
+
+      console.log(`✅ Upgrade complete: ${pnr} → ${berthId}`);
+
+      return {
+        success: true,
+        pnr,
+        berthId,
+        berthType: berth.type,
+        message: `Upgraded to ${berthId} (${berth.type})`
+      };
+
+    } catch (error) {
+      console.error(`❌ Error applying upgrade for ${pnr}:`, error.message);
+      throw error;
+    }
+  }
 }
 
 module.exports = new AllocationService();
+

@@ -11,12 +11,17 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
+    padding: 20px 25px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    box-shadow: 0 4px 8px rgba(44, 62, 80, 0.3);
 }
 
 .page-header h1 {
-    font-size: 28px;
-    color: #1e293b;
+    font-size: 20px;
+    color: white;
     margin: 0;
+    font-weight: 600;
 }
 
 .header-actions {

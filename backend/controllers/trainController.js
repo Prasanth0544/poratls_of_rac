@@ -220,6 +220,10 @@ class TrainController {
       const result = await StationEventService.processStationArrival(trainState);
       trainState.currentStationIdx++;
 
+      // Unlock station upgrade lock for new station
+      trainState.unlockStationForUpgrades();
+      console.log(`🔓 Upgrade lock cleared for new station ${trainState.currentStationIdx}`);
+
       // Broadcast station arrival with all details
       if (wsManager) {
         wsManager.broadcastStationArrival({

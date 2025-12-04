@@ -1032,7 +1032,7 @@ class PassengerController {
    * Subscribe to push notifications
    * POST /api/passenger/push-subscribe
    */
-  subscribeToPush(req, res) {
+  async subscribeToPush(req, res) {
     try {
       const { irctcId, subscription } = req.body;
 
@@ -1044,11 +1044,11 @@ class PassengerController {
       }
 
       const PushSubscriptionService = require('../services/PushSubscriptionService');
-      PushSubscriptionService.addSubscription(irctcId, subscription);
+      await PushSubscriptionService.addSubscription(irctcId, subscription, req.headers['user-agent']);
 
       res.json({
         success: true,
-        message: 'Subscribed to push notifications'
+        message: 'Subscribed to push notifications (stored in MongoDB)'
       });
     } catch (error) {
       console.error('❌ Error subscribing to push:', error);
@@ -1063,7 +1063,7 @@ class PassengerController {
    * Unsubscribe from push notifications
    * POST /api/passenger/push-unsubscribe
    */
-  unsubscribeFromPush(req, res) {
+  async unsubscribeFromPush(req, res) {
     try {
       const { irctcId, endpoint } = req.body;
 
@@ -1075,7 +1075,7 @@ class PassengerController {
       }
 
       const PushSubscriptionService = require('../services/PushSubscriptionService');
-      const removed = PushSubscriptionService.removeSubscription(irctcId, endpoint);
+      const removed = await PushSubscriptionService.removeSubscription(irctcId, endpoint);
 
       res.json({
         success: removed,
@@ -1105,6 +1105,242 @@ class PassengerController {
       });
     } catch (error) {
       console.error('❌ Error getting VAPID key:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get available boarding stations for change (next 3 forward stations)
+   * GET /api/passenger/available-boarding-stations/:pnr
+   */
+  async getAvailableBoardingStations(req, res) {
+    try {
+      const { pnr } = req.params;
+
+      if (!pnr) {
+        return res.status(400).json({
+          success: false,
+          message: 'PNR number is required'
+        });
+      }
+
+      // Get passenger from database
+      const passenger = await db.getPassengersCollection().findOne({
+        PNR_Number: pnr
+      });
+
+      if (!passenger) {
+        return res.status(404).json({
+          success: false,
+          message: 'Passenger not found'
+        });
+      }
+
+      // Check if already changed
+      if (passenger.boardingStationChanged) {
+        return res.json({
+          success: true,
+          alreadyChanged: true,
+          message: 'Boarding station has already been changed once',
+          currentStation: passenger.Boarding_Station
+        });
+      }
+
+      // Get train state to access route
+      const trainState = trainController.getGlobalTrainState();
+      if (!trainState || !trainState.journey || !trainState.journey.stations) {
+        return res.status(400).json({
+          success: false,
+          message: 'Train journey not initialized'
+        });
+      }
+
+      const stations = trainState.journey.stations;
+
+      // Find current boarding station index
+      const currentFromCode = passenger.From;
+      const currentStationIdx = stations.findIndex(s => s.code === currentFromCode);
+
+      if (currentStationIdx === -1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current boarding station not found in route'
+        });
+      }
+
+      // Get next 3 forward stations (excluding current and deboarding station)
+      const toCode = passenger.To;
+      const toIdx = stations.findIndex(s => s.code === toCode);
+
+      const availableStations = [];
+      for (let i = currentStationIdx + 1; i < Math.min(currentStationIdx + 4, toIdx); i++) {
+        if (i < stations.length) {
+          availableStations.push({
+            code: stations[i].code,
+            name: stations[i].name,
+            arrivalTime: stations[i].arrival
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        alreadyChanged: false,
+        currentStation: {
+          code: currentFromCode,
+          name: passenger.Boarding_Station
+        },
+        availableStations,
+        deboardingStation: {
+          code: toCode,
+          name: passenger.Deboarding_Station
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error getting available boarding stations:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Change boarding station for passenger
+   * POST /api/passenger/change-boarding-station
+   * Body: { pnr, irctcId, newStationCode }
+   */
+  async changeBoardingStation(req, res) {
+    try {
+      const { pnr, irctcId, newStationCode } = req.body;
+
+      if (!pnr || !irctcId || !newStationCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'PNR, IRCTC ID, and new station code are required'
+        });
+      }
+
+      // Get passenger from database
+      const passenger = await db.getPassengersCollection().findOne({
+        PNR_Number: pnr,
+        IRCTC_ID: irctcId
+      });
+
+      if (!passenger) {
+        return res.status(404).json({
+          success: false,
+          message: 'Passenger not found or IRCTC ID does not match'
+        });
+      }
+
+      // Check if already changed
+      if (passenger.boardingStationChanged) {
+        return res.status(400).json({
+          success: false,
+          message: 'Boarding station can only be changed once. Already changed previously.'
+        });
+      }
+
+      // Get train state to validate new station
+      const trainState = trainController.getGlobalTrainState();
+      if (!trainState || !trainState.journey || !trainState.journey.stations) {
+        return res.status(400).json({
+          success: false,
+          message: 'Train journey not initialized'
+        });
+      }
+
+      const stations = trainState.journey.stations;
+      const currentFromCode = passenger.From;
+      const currentStationIdx = stations.findIndex(s => s.code === currentFromCode);
+      const newStationIdx = stations.findIndex(s => s.code === newStationCode);
+      const toIdx = stations.findIndex(s => s.code === passenger.To);
+
+      // Validate: new station must be after current and before destination
+      if (newStationIdx === -1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid station code'
+        });
+      }
+
+      if (newStationIdx <= currentStationIdx) {
+        return res.status(400).json({
+          success: false,
+          message: 'Can only change to forward stations'
+        });
+      }
+
+      if (newStationIdx >= toIdx) {
+        return res.status(400).json({
+          success: false,
+          message: 'New boarding station must be before deboarding station'
+        });
+      }
+
+      // Check if within next 3 stations
+      if (newStationIdx > currentStationIdx + 3) {
+        return res.status(400).json({
+          success: false,
+          message: 'Can only change to one of the next 3 stations'
+        });
+      }
+
+      const newStation = stations[newStationIdx];
+
+      // Update database
+      const result = await db.getPassengersCollection().updateOne(
+        { PNR_Number: pnr, IRCTC_ID: irctcId },
+        {
+          $set: {
+            Boarding_Station: newStation.name,
+            From: newStation.code,
+            boardingStationChanged: true,
+            boardingStationChangedAt: new Date(),
+            previousBoardingStation: passenger.Boarding_Station,
+            previousFrom: passenger.From
+          }
+        }
+      );
+
+      if (result.modifiedCount === 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to update boarding station'
+        });
+      }
+
+      // Also update in-memory trainState if passenger exists there
+      if (trainState.passengers) {
+        const memPassenger = trainState.passengers.find(p => p.pnr === pnr);
+        if (memPassenger) {
+          memPassenger.from = newStation.code;
+          memPassenger.fromIdx = newStationIdx;
+        }
+      }
+
+      console.log(`✅ Boarding station changed for ${pnr}: ${passenger.Boarding_Station} → ${newStation.name}`);
+
+      res.json({
+        success: true,
+        message: 'Boarding station changed successfully',
+        newStation: {
+          code: newStation.code,
+          name: newStation.name
+        },
+        previousStation: {
+          code: passenger.From,
+          name: passenger.Boarding_Station
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error changing boarding station:', error);
       res.status(500).json({
         success: false,
         error: error.message

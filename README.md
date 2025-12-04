@@ -317,18 +317,131 @@ PORT=5000
 
 ---
 
-## 🎓 Key Algorithms
+## 🎓 Interview-Ready Technical Highlights
 
-### **Segment-based Occupancy**
-Tracks berth availability for each journey segment, enabling accurate reallocation.
+### 🔔 Web Push Notifications (Free & Unlimited)
+**Implementation:** Browser push notifications using Web Push Protocol (W3C Standard)
+- **Cost:** 100% FREE - Uses Google FCM/Mozilla Push servers
+- **Limits:** Unlimited notifications, works even when browser is closed
+- **Tech Stack:** `web-push` npm package + Service Workers
+- **Storage:** MongoDB-backed subscription persistence (survives server restarts)
 
-### **RAC Reallocation**
-Automatically upgrades RAC passengers when berths become vacant due to deboarding or no-shows.
+```
+How it works:
+1. Browser creates unique push subscription (endpoint + encryption keys)
+2. Subscription stored in MongoDB → survives server restarts
+3. Backend uses VAPID keys to authenticate with browser vendors
+4. Push notification delivered via Google/Mozilla servers → FREE!
+```
 
-### **No-Show Detection**
-Identifies passengers who didn't board at their origin station and frees their berths.
+**Interview Points:**
+- Explain VAPID (Voluntary Application Server Identification)
+- Difference between in-memory vs persistent subscription storage
+- Service Worker lifecycle for handling push events
+- Why HTTPS is required (localhost exempt in development)
 
 ---
+
+### 🚀 Real-Time Architecture
+**WebSocket Implementation:**
+- Bi-directional communication for instant updates
+- Auto-reconnection with exponential backoff
+- Event-driven architecture (TRAIN_UPDATE, STATION_ARRIVAL, RAC_REALLOCATION)
+
+**Interview Points:**
+- WebSocket vs HTTP polling vs Server-Sent Events
+- Connection state management and heartbeat mechanism
+- Broadcasting updates to multiple clients efficiently
+
+---
+
+### 📊 Segment-based Occupancy Algorithm
+**Problem:** A berth can be occupied by different passengers for different journey segments.
+
+**Solution:** Track occupancy per segment (station-to-station):
+```javascript
+berth.segmentOccupancy = ['PNR1', 'PNR1', null, null, 'PNR2', 'PNR2', 'PNR2']
+//                        Stn0    Stn1   Stn2   Stn3   Stn4    Stn5    Stn6
+```
+
+**Interview Points:**
+- Time-based resource allocation (similar to hotel booking systems)
+- Detecting vacant segments for RAC upgrades
+- Collision detection when allocating berths
+
+---
+
+### 🎯 RAC Reallocation Logic
+**Eligibility Matrix:**
+1. ✅ RAC passenger must be "online" (available on app)
+2. ✅ Must overlap with vacant berth's journey segment
+3. ✅ Must be currently boarded
+4. ✅ No gender/class conflicts
+5. ✅ Berth must be genuinely vacant (no future occupant)
+
+**Interview Points:**
+- Multi-criteria eligibility filtering
+- Priority queue for RAC passengers (by RAC number)
+- Idempotent upgrade acceptance (prevent double upgrades)
+
+---
+
+### 🔒 JWT Authentication Flow
+**Three Portal Authentication:**
+- **Passenger Portal:** PNR + IRCTC ID login → JWT token
+- **TTE Portal:** Employee ID + password → JWT with role
+- **Admin Portal:** Admin credentials → Full access JWT
+
+**Interview Points:**
+- Stateless authentication with JWT
+- Token storage (localStorage vs cookies vs httpOnly cookies)
+- Role-based access control (RBAC)
+
+---
+
+### 🗃️ MongoDB Schema Design
+**Key Design Decisions:**
+- Passengers stored with PNR as primary identifier
+- Segment occupancy stored as arrays (not separate collection)
+- Push subscriptions indexed by user ID + endpoint
+
+**Interview Points:**
+- Denormalization for read performance
+- Indexing strategies for fast queries
+- Upsert patterns for subscription management
+
+---
+
+### 📱 Service Worker Implementation
+```javascript
+// sw.js - Runs independently of main browser thread
+self.addEventListener('push', (event) => {
+    const data = event.data.json();
+    self.registration.showNotification(data.title, options);
+});
+```
+
+**Interview Points:**
+- Service Worker lifecycle (install → activate → fetch)
+- Background sync capabilities
+- Caching strategies for offline support
+
+---
+
+### 🎨 Frontend Architecture
+**Multi-Portal React Apps:**
+- Shared component patterns across 3 portals
+- Context API for state management
+- Custom hooks for WebSocket and API calls
+
+**Interview Points:**
+- Component composition vs inheritance
+- State lifting and prop drilling solutions
+- Code reuse strategies across multiple apps
+
+---
+
+
 
 ## 🚀 Production Deployment
 

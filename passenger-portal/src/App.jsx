@@ -1,46 +1,31 @@
 // passenger-portal/src/App.jsx
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Button } from '@mui/material';
+import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Tabs, Tab } from '@mui/material';
 import TrainIcon from '@mui/icons-material/Train';
+import HomeIcon from '@mui/icons-material/Home';
+import SearchIcon from '@mui/icons-material/Search';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
+import MapIcon from '@mui/icons-material/Map';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage'; // ✅ NEW - Replace placeholder
-import UpgradeOffersPage from './pages/UpgradeOffersPage'; // ✅ Upgrade offers
-import NotificationBell from './components/NotificationBell'; // ✅ Notifications
+import DashboardPage from './pages/DashboardPage';
+import PNRSearchPage from './pages/PNRSearchPage';
+import ViewTicketPage from './pages/ViewTicketPage';
+import JourneyVisualizationPage from './pages/JourneyVisualizationPage';
+import NotificationBell from './components/NotificationBell';
 import './App.css';
-import './UserMenu.css'; // ✅ 3-dot menu styling
-
-// Temporary Home Component (will be replaced with actual dashboard)
-function HomePage() {
-    return (
-        <Box sx={{ textAlign: 'center', mt: 8 }}>
-            <Typography variant="h3" gutterBottom>
-                Welcome to Passenger Portal
-            </Typography>
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
-                Login functionality coming soon...
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-                After authentication is implemented, you'll be able to:
-            </Typography>
-            <Box sx={{ mt: 2, textAlign: 'left', maxWidth: 600, mx: 'auto' }}>
-                <Typography variant="body2" sx={{ mb: 1 }}>✓ View your tickets (using IRCTC ID)</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>✓ Check RAC upgrade status</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>✓ Receive real-time notifications</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>✓ View boarding pass & journey details</Typography>
-            </Box>
-        </Box>
-    );
-}
+import './UserMenu.css';
 
 const theme = createTheme({
     palette: {
         primary: {
-            main: '#1976d2',
+            main: '#2c3e50',  // Dark navy - same as frontend
+            light: '#34495e',
+            dark: '#1a252f',
         },
         secondary: {
-            main: '#dc004e',
+            main: '#3498db',  // Blue accent
         },
     },
     typography: {
@@ -51,13 +36,81 @@ const theme = createTheme({
     },
 });
 
+// Navigation component with tabs
+function Navigation({ user }) {
+    const location = useLocation();
+
+    const getTabValue = () => {
+        switch (location.pathname) {
+            case '/': return 0;
+            case '/pnr-search': return 1;
+            case '/tickets': return 2;
+            case '/journey': return 3;
+            default: return 0;
+        }
+    };
+
+    return (
+        <AppBar position="static" elevation={2}>
+            <Toolbar>
+                <TrainIcon sx={{ mr: 2 }} />
+                <Typography variant="h6" component="div" sx={{ mr: 4 }}>
+                    Passenger Portal
+                </Typography>
+
+                <Tabs
+                    value={getTabValue()}
+                    textColor="inherit"
+                    indicatorColor="secondary"
+                    sx={{
+                        flexGrow: 1,
+                        '& .MuiTab-root': {
+                            minHeight: 64,
+                            color: 'rgba(255,255,255,0.7)',
+                            '&.Mui-selected': { color: 'white' }
+                        }
+                    }}
+                >
+                    <Tab
+                        icon={<HomeIcon />}
+                        label="Home"
+                        component={Link}
+                        to="/"
+                        iconPosition="start"
+                    />
+                    <Tab
+                        icon={<SearchIcon />}
+                        label="PNR Search"
+                        component={Link}
+                        to="/pnr-search"
+                        iconPosition="start"
+                    />
+                    <Tab
+                        icon={<ConfirmationNumberIcon />}
+                        label="View Tickets"
+                        component={Link}
+                        to="/tickets"
+                        iconPosition="start"
+                    />
+                    <Tab
+                        icon={<MapIcon />}
+                        label="Journey"
+                        component={Link}
+                        to="/journey"
+                        iconPosition="start"
+                    />
+                </Tabs>
+
+                <NotificationBell irctcId={user?.IRCTC_ID} />
+            </Toolbar>
+        </AppBar>
+    );
+}
+
 function App() {
     const [authenticated, setAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 960);
-    const [menuOpen, setMenuOpen] = useState(false); // ✅ 3-dot menu state
 
-    // ✅ Check for existing auth token on mount
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('user');
@@ -66,25 +119,8 @@ function App() {
             setAuthenticated(true);
             setUser(JSON.parse(userData));
         }
-
-        // Handle window resize for mobile detection
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 960);
-        };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // ✅ Logout handler
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setAuthenticated(false);
-        setUser(null);
-        setMenuOpen(false);
-    };
-
-    // ✅ Show login page if not authenticated
     if (!authenticated) {
         return <LoginPage />;
     }
@@ -94,45 +130,14 @@ function App() {
             <CssBaseline />
             <Router>
                 <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-                    <AppBar position="static" elevation={2}>
-                        <Toolbar>
-                            <TrainIcon sx={{ mr: 2 }} />
-                            <Typography variant={isMobile ? "subtitle1" : "h6"} component="div" sx={{ flexGrow: 1 }}>
-                                Indian Railways - Passenger Portal
-                            </Typography>
-                            <Button color="inherit" component={Link} to="/">
-                                Home
-                            </Button>
-                            <Button color="inherit" component={Link} to="/upgrades">
-                                ⬆️ Upgrades
-                            </Button>
-                            {/* ✅ Notification Bell */}
-                            <NotificationBell irctcId={user?.IRCTC_ID} />
-                            {/* ✅ 3-dot menu */}
-                            <div className="user-menu">
-                                <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)}>
-                                    ⋮
-                                </button>
-                                {menuOpen && (
-                                    <div className="menu-dropdown">
-                                        <div className="menu-user-info">
-                                            <p><strong>{user?.name || 'Passenger'}</strong></p>
-                                            <p className="user-role">{user?.role || 'PASSENGER'}</p>
-                                        </div>
-                                        <hr />
-                                        <button onClick={handleLogout} className="menu-item logout">
-                                            🚪 Logout
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </Toolbar>
-                    </AppBar>
+                    <Navigation user={user} />
 
                     <Box sx={{ flex: 1 }}>
                         <Routes>
                             <Route path="/" element={<DashboardPage />} />
-                            <Route path="/upgrades" element={<UpgradeOffersPage />} />
+                            <Route path="/pnr-search" element={<PNRSearchPage />} />
+                            <Route path="/tickets" element={<ViewTicketPage />} />
+                            <Route path="/journey" element={<JourneyVisualizationPage />} />
                         </Routes>
                     </Box>
 

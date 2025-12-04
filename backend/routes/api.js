@@ -59,6 +59,16 @@ router.post('/passenger/revert-no-show',
   (req, res) => passengerController.selfRevertNoShow(req, res)
 );
 
+// Get available boarding stations for change (next 3 forward stations)
+router.get('/passenger/available-boarding-stations/:pnr',
+  (req, res) => passengerController.getAvailableBoardingStations(req, res)
+);
+
+// Change boarding station (one-time only)
+router.post('/passenger/change-boarding-station',
+  (req, res) => passengerController.changeBoardingStation(req, res)
+);
+
 
 // Apply reallocation manually
 router.post('/reallocation/apply',
@@ -235,6 +245,12 @@ router.get('/reallocation/station-wise',
   (req, res) => stationWiseApprovalController.getStationWiseData(req, res)
 );
 
+// Get approved reallocations (for Upgraded passengers tab)
+router.get('/reallocation/approved',
+  validationMiddleware.checkTrainInitialized,
+  (req, res) => stationWiseApprovalController.getApprovedReallocations(req, res)
+);
+
 // ✅ NEW - Get current station HashMap matching data
 router.get('/reallocation/current-station-matching',
   validationMiddleware.checkTrainInitialized,
@@ -282,6 +298,150 @@ router.post('/reallocation/create-from-matches',
       });
     } catch (error) {
       console.error('Error creating pending reallocations:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ✅ NEW - Get station upgrade lock status
+router.get('/reallocation/upgrade-status',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const trainState = trainController.getGlobalTrainState();
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...trainState.getUpgradeLockStatus(),
+          pendingUpgrades: trainState.getPendingUpgrades(),
+          completedUpgrades: trainState.stationUpgradeLock.completedUpgrades,
+          rejectedUpgrades: trainState.stationUpgradeLock.rejectedUpgrades
+        }
+      });
+    } catch (error) {
+      console.error('Error getting upgrade status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ✅ NEW - Approve an upgrade (TTE)
+router.post('/reallocation/upgrade/:upgradeId/approve',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const { upgradeId } = req.params;
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      // Get upgrade details before completing
+      const pendingUpgrade = trainState.stationUpgradeLock.pendingUpgrades.find(
+        u => u.upgradeId === upgradeId
+      );
+
+      if (!pendingUpgrade) {
+        return res.status(404).json({ error: 'Upgrade not found or already processed' });
+      }
+
+      // Check collision before approval
+      if (trainState.isBerthUsedForUpgrade(pendingUpgrade.berthId)) {
+        return res.status(409).json({
+          error: 'Berth already allocated to another passenger',
+          berthId: pendingUpgrade.berthId
+        });
+      }
+
+      if (trainState.isPassengerAlreadyUpgraded(pendingUpgrade.pnr)) {
+        return res.status(409).json({
+          error: 'Passenger already upgraded',
+          pnr: pendingUpgrade.pnr
+        });
+      }
+
+      // Complete the upgrade
+      const upgrade = trainState.completeUpgrade(upgradeId);
+
+      // Apply the actual upgrade (update passenger status, berth allocation)
+      const AllocationService = require('../services/reallocation/AllocationService');
+      await AllocationService.applyUpgrade(
+        pendingUpgrade.pnr,
+        pendingUpgrade.berthId,
+        trainState
+      );
+
+      res.json({
+        success: true,
+        message: `Upgrade approved for ${pendingUpgrade.pnr}`,
+        upgrade: upgrade
+      });
+    } catch (error) {
+      console.error('Error approving upgrade:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ✅ NEW - Reject an upgrade (TTE)
+router.post('/reallocation/upgrade/:upgradeId/reject',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const { upgradeId } = req.params;
+      const { reason } = req.body;
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      const upgrade = trainState.rejectUpgrade(upgradeId, reason || 'Rejected by TTE');
+
+      if (!upgrade) {
+        return res.status(404).json({ error: 'Upgrade not found or already processed' });
+      }
+
+      res.json({
+        success: true,
+        message: `Upgrade rejected for ${upgrade.pnr}`,
+        upgrade: upgrade
+      });
+    } catch (error) {
+      console.error('Error rejecting upgrade:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ✅ NEW - Reset upgrade lock (force recalculate)
+router.post('/reallocation/reset-upgrade-lock',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      trainState.unlockStationForUpgrades();
+
+      res.json({
+        success: true,
+        message: 'Upgrade lock reset. You can now recalculate upgrades.'
+      });
+    } catch (error) {
+      console.error('Error resetting upgrade lock:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -449,6 +609,12 @@ router.get('/tte/statistics',
   (req, res) => tteController.getStatistics(req, res)
 );
 
+// Get upgraded passengers (RAC → CNF) from MongoDB
+router.get('/tte/upgraded-passengers',
+  validationMiddleware.checkTrainInitialized,
+  (req, res) => tteController.getUpgradedPassengers(req, res)
+);
+
 // ========== TTE BOARDING VERIFICATION ROUTES ========== ✅ NEW
 // Get boarding verification queue
 router.get('/tte/boarding-queue',
@@ -513,6 +679,42 @@ router.post('/admin/fix-rac-boarding',
       res.status(500).json({ success: false, error: error.message });
     }
   }
+);
+
+// ========== PUSH NOTIFICATION ROUTES ========== ✅ NEW
+// Get VAPID public key for push subscription
+router.get('/push/vapid-public-key',
+  (req, res) => passengerController.getVapidPublicKey(req, res)
+);
+
+// Subscribe to push notifications
+router.post('/passenger/push-subscribe',
+  (req, res) => passengerController.subscribeToPush(req, res)
+);
+
+// Unsubscribe from push notifications
+router.post('/passenger/push-unsubscribe',
+  (req, res) => passengerController.unsubscribeFromPush(req, res)
+);
+
+// Self-revert NO-SHOW (passenger initiated)
+router.post('/passenger/revert-no-show',
+  (req, res) => passengerController.selfRevertNoShow(req, res)
+);
+
+// Get in-app notifications for passenger
+router.get('/passenger/notifications',
+  (req, res) => passengerController.getInAppNotifications(req, res)
+);
+
+// Mark notification as read
+router.post('/passenger/notifications/:id/read',
+  (req, res) => passengerController.markNotificationRead(req, res)
+);
+
+// Mark all notifications as read
+router.post('/passenger/notifications/mark-all-read',
+  (req, res) => passengerController.markAllNotificationsRead(req, res)
 );
 
 

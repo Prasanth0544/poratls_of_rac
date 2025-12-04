@@ -125,6 +125,33 @@ class StationWiseApprovalController {
     }
 
     /**
+     * Get all approved reallocations
+     * GET /reallocation/approved
+     */
+    async getApprovedReallocations(req, res) {
+        try {
+            const db = require('../config/db');
+            const database = db.getPassengersCollection().s.db;
+            const collection = database.collection('station_reallocations');
+
+            const approved = await collection.find({ status: 'approved' }).sort({ processedAt: -1 }).toArray();
+
+            res.json({
+                success: true,
+                data: approved,
+                count: approved.length
+            });
+        } catch (error) {
+            console.error('Error getting approved reallocations:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to get approved reallocations',
+                error: error.message
+            });
+        }
+    }
+
+    /**
      * Get station-wise data for Admin portal
      * GET /reallocation/station-wise
      */

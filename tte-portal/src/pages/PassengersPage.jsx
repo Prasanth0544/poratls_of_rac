@@ -67,17 +67,19 @@ function PassengersPage() {
   const [filteredPassengers, setFilteredPassengers] = useState([]);
   const [counts, setCounts] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [trainData, setTrainData] = useState(null); // Fetch from TTE API
+  const [trainData, setTrainData] = useState(null);
 
   const [searchPNR, setSearchPNR] = useState("");
   const [searchCoach, setSearchCoach] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all"); // DEFAULT: Show all passengers
+  const [searchBerth, setSearchBerth] = useState(""); // NEW: Berth filter (e.g., S1-4)
+  const [filterStatus, setFilterStatus] = useState("all");
   const [showVacantBerths, setShowVacantBerths] = useState(false);
   const [vacantBerths, setVacantBerths] = useState([]);
   const [filteredVacantBerths, setFilteredVacantBerths] = useState([]);
   const [vacantFromStation, setVacantFromStation] = useState("");
   const [vacantToStation, setVacantToStation] = useState("");
-  const [vacantCoach, setVacantCoach] = useState(""); // NEW: Coach filter for vacant berths
+  const [vacantCoach, setVacantCoach] = useState("");
+  const [vacantBerthSearch, setVacantBerthSearch] = useState(""); // NEW: Berth filter for vacant berths
 
   useEffect(() => {
     loadData();
@@ -87,12 +89,12 @@ function PassengersPage() {
     applyFilters();
     calculateVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passengers, searchPNR, searchCoach, filterStatus, trainData]);
+  }, [passengers, searchPNR, searchCoach, searchBerth, filterStatus, trainData]);
 
   useEffect(() => {
     filterVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vacantBerths, vacantFromStation, vacantToStation, vacantCoach]);
+  }, [vacantBerths, vacantFromStation, vacantToStation, vacantCoach, vacantBerthSearch]);
 
   const calculateVacantBerths = async () => {
     if (!trainData || !trainData.coaches || !trainData.journeyStarted) {
@@ -147,6 +149,14 @@ function PassengersPage() {
 
   const filterVacantBerths = () => {
     let filtered = [...vacantBerths];
+
+    // Filter by berth number (e.g., S1-4, B2-37)
+    if (vacantBerthSearch.trim()) {
+      const searchTerm = vacantBerthSearch.toLowerCase();
+      filtered = filtered.filter(
+        (berth) => berth.fullBerthNo?.toLowerCase().includes(searchTerm)
+      );
+    }
 
     // Filter by coach (case-insensitive)
     if (vacantCoach.trim()) {
@@ -260,10 +270,10 @@ function PassengersPage() {
       );
     }
 
-    // Search by Coach
-    if (searchCoach.trim()) {
+    // Search by Berth (e.g., S1-4, B2-37)
+    if (searchBerth.trim()) {
       filtered = filtered.filter((p) =>
-        p.coach?.toLowerCase().includes(searchCoach.trim().toLowerCase()),
+        p.berth?.toLowerCase().includes(searchBerth.trim().toLowerCase()),
       );
     }
 
@@ -369,7 +379,7 @@ function PassengersPage() {
               onChange={(e) => setSearchPNR(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '200px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -382,12 +392,12 @@ function PassengersPage() {
             />
             <input
               type="text"
-              placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+              placeholder="🚂 Coach (S1, B2)..."
               value={searchCoach}
               onChange={(e) => setSearchCoach(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '150px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -398,7 +408,25 @@ function PassengersPage() {
               onFocus={(e) => e.target.style.borderColor = '#3498db'}
               onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
             />
-            {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+            <input
+              type="text"
+              placeholder="🛏️ Berth (S1-4, B2-37)..."
+              value={searchBerth}
+              onChange={(e) => setSearchBerth(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '180px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            {(searchPNR || searchCoach || searchBerth) && filteredPassengers.length > 0 && (
               <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
                 {filteredPassengers.length} result(s)
               </span>
@@ -474,14 +502,21 @@ function PassengersPage() {
                 />
                 <input
                   type="text"
-                  placeholder="From Station: (Enter: Station Name/Code)"
+                  placeholder="Berth: (e.g., S1-4, B2-37)"
+                  value={vacantBerthSearch}
+                  onChange={(e) => setVacantBerthSearch(e.target.value)}
+                  className="vacant-filter-input"
+                />
+                <input
+                  type="text"
+                  placeholder="From Station"
                   value={vacantFromStation}
                   onChange={(e) => setVacantFromStation(e.target.value)}
                   className="vacant-filter-input"
                 />
                 <input
                   type="text"
-                  placeholder="To Station: (Enter: Station Name/Code)"
+                  placeholder="To Station"
                   value={vacantToStation}
                   onChange={(e) => setVacantToStation(e.target.value)}
                   className="vacant-filter-input"
@@ -489,6 +524,7 @@ function PassengersPage() {
                 <button
                   onClick={() => {
                     setVacantCoach("");
+                    setVacantBerthSearch("");
                     setVacantFromStation("");
                     setVacantToStation("");
                   }}

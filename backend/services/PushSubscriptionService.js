@@ -1,7 +1,8 @@
 // backend/services/PushSubscriptionService.js
 /**
  * Push Subscription Service
- * Manages browser push notification subscriptions for passengers
+ * Manages browser push notification subscriptions
+ * Uses in-memory storage (subscriptions lost on restart, but simplifies setup)
  */
 
 class PushSubscriptionService {
@@ -12,13 +13,13 @@ class PushSubscriptionService {
         // Store TTE subscriptions by TTE ID
         this.tteSubscriptions = new Map(); // tteId -> [subscription objects]
 
-        console.log('📱 PushSubscriptionService initialized');
+        console.log('📱 PushSubscriptionService initialized (in-memory)');
     }
 
     /**
      * Add a new push subscription for a passenger
      */
-    addSubscription(irctcId, subscription) {
+    async addSubscription(irctcId, subscription, userAgent = '') {
         if (!irctcId) {
             throw new Error('IRCTC ID is required');
         }
@@ -49,14 +50,14 @@ class PushSubscriptionService {
     /**
      * Get all subscriptions for a passenger
      */
-    getSubscriptions(irctcId) {
+    async getSubscriptions(irctcId) {
         return this.subscriptions.get(irctcId) || [];
     }
 
     /**
      * Remove a specific subscription
      */
-    removeSubscription(irctcId, endpoint) {
+    async removeSubscription(irctcId, endpoint) {
         const subs = this.subscriptions.get(irctcId);
 
         if (!subs) {
@@ -81,9 +82,27 @@ class PushSubscriptionService {
     }
 
     /**
+     * Delete a subscription by endpoint (for invalid subscriptions)
+     */
+    async deleteSubscription(endpoint) {
+        for (const [irctcId, subs] of this.subscriptions.entries()) {
+            const index = subs.findIndex(sub => sub.endpoint === endpoint);
+            if (index !== -1) {
+                subs.splice(index, 1);
+                if (subs.length === 0) {
+                    this.subscriptions.delete(irctcId);
+                }
+                console.log(`🗑️  Deleted invalid subscription`);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Remove all subscriptions for a passenger
      */
-    clearSubscriptions(irctcId) {
+    async clearSubscriptions(irctcId) {
         const deleted = this.subscriptions.delete(irctcId);
         if (deleted) {
             console.log(`🗑️  Cleared all subscriptions for ${irctcId}`);
@@ -105,7 +124,7 @@ class PushSubscriptionService {
     /**
      * Get statistics
      */
-    getStats() {
+    async getStats() {
         return {
             totalUsers: this.subscriptions.size,
             totalSubscriptions: this.getTotalCount()
@@ -117,7 +136,7 @@ class PushSubscriptionService {
     /**
      * Add a push subscription for a TTE
      */
-    addTTESubscription(tteId, subscription) {
+    async addTTESubscription(tteId, subscription, userAgent = '') {
         if (!tteId) {
             throw new Error('TTE ID is required');
         }
@@ -146,14 +165,14 @@ class PushSubscriptionService {
     /**
      * Get all subscriptions for a TTE
      */
-    getTTESubscriptions(tteId) {
+    async getTTESubscriptions(tteId) {
         return this.tteSubscriptions.get(tteId) || [];
     }
 
     /**
      * Get ALL TTE subscriptions (for broadcasting to all TTEs)
      */
-    getAllTTESubscriptions() {
+    async getAllTTESubscriptions() {
         const allSubs = [];
         for (const subs of this.tteSubscriptions.values()) {
             allSubs.push(...subs);
@@ -164,7 +183,7 @@ class PushSubscriptionService {
     /**
      * Remove a TTE subscription
      */
-    removeTTESubscription(tteId, endpoint) {
+    async removeTTESubscription(tteId, endpoint) {
         const subs = this.tteSubscriptions.get(tteId);
 
         if (!subs) return false;
@@ -188,7 +207,7 @@ class PushSubscriptionService {
     /**
      * Clear all TTE subscriptions
      */
-    clearTTESubscriptions(tteId) {
+    async clearTTESubscriptions(tteId) {
         const deleted = this.tteSubscriptions.delete(tteId);
         if (deleted) {
             console.log(`🗑️  Cleared all TTE subscriptions for ${tteId}`);

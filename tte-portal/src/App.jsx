@@ -14,6 +14,7 @@ import PassengersPage from './pages/PassengersPage'; // ✅ UNIFIED - Same as ad
 import BoardedPassengersPage from './pages/BoardedPassengersPage'; // ✅ NEW
 import UpgradeNotificationsPage from './pages/UpgradeNotificationsPage'; // ✅ Sent offers tracking
 import PendingReallocationsPage from './pages/PendingReallocationsPage'; // ✅ NEW - Station-wise approval
+import VisualizationPage from './pages/VisualizationPage'; // ✅ NEW - Train Journey Visualization
 import './App.css';
 import './UserMenu.css'; // ✅ 3-dot menu styling
 
@@ -36,14 +37,16 @@ function OfflineUpgradeVerification() {
 const theme = createTheme({
     palette: {
         primary: {
-            main: '#1565c0',
+            main: '#2c3e50',  // Dark navy - same as frontend
+            light: '#34495e',
+            dark: '#1a252f',
         },
         secondary: {
-            main: '#f57c00',
+            main: '#3498db',  // Blue accent
         },
     },
     typography: {
-        fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '\"Roboto\", \"Helvetica\", \"Arial\", sans-serif',
         h4: {
             fontWeight: 600,
         },
@@ -133,7 +136,7 @@ function App() {
                         value={currentTab}
                         onChange={handleTabChange}
                         sx={{
-                            bgcolor: '#0d47a1',
+                            bgcolor: '#1a252f',
                             '& .MuiTab-root': {
                                 color: 'rgba(255,255,255,0.7)',
                                 fontWeight: 500,
@@ -146,7 +149,7 @@ function App() {
                                 }
                             },
                             '& .MuiTabs-indicator': {
-                                backgroundColor: '#ffffff',
+                                backgroundColor: '#3498db',
                                 height: 3
                             }
                         }}
@@ -160,8 +163,8 @@ function App() {
                         <Tab label="Boarded Passengers" />
                         <Tab label="RAC Upgrades" />
                         <Tab label="Action History" />
-                        <Tab label="Sent Offers" />
-                        <Tab label="Pending Reallocations" /> {/* ✅ NEW */}
+                        <Tab label="Pending Reallocations" />
+                        <Tab label="Journey Visualization" />
                     </Tabs>
                 </AppBar>
 
@@ -172,8 +175,8 @@ function App() {
                     {currentTab === 2 && <BoardedPassengersPage />}
                     {currentTab === 3 && <OfflineUpgradesPage />}
                     {currentTab === 4 && <ActionHistoryPage />}
-                    {currentTab === 5 && <UpgradeNotificationsPage />}
-                    {currentTab === 6 && <PendingReallocationsPage />} {/* ✅ NEW */}
+                    {currentTab === 5 && <PendingReallocationsPage />}
+                    {currentTab === 6 && <VisualizationPage />}
                 </Box>
 
                 <Box component="footer" sx={{ bgcolor: 'background.paper', py: 2, borderTop: '1px solid #e0e0e0' }}>

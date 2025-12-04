@@ -73,13 +73,15 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
   const [loading, setLoading] = useState(true);
 
   const [searchPNR, setSearchPNR] = useState("");
-  const [searchCoach, setSearchCoach] = useState(""); // NEW: Coach filter
+  const [searchCoach, setSearchCoach] = useState("");
+  const [searchBerth, setSearchBerth] = useState(""); // NEW: Berth filter (e.g., S1-4, B2-37)
   const [filterStatus, setFilterStatus] = useState("all");
   const [showVacantBerths, setShowVacantBerths] = useState(false);
   const [vacantBerths, setVacantBerths] = useState([]);
   const [filteredVacantBerths, setFilteredVacantBerths] = useState([]);
   const [vacantFromStation, setVacantFromStation] = useState("");
   const [vacantToStation, setVacantToStation] = useState("");
+  const [vacantBerthSearch, setVacantBerthSearch] = useState(""); // NEW: Berth filter for vacant berths
 
   useEffect(() => {
     loadData();
@@ -89,12 +91,12 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     applyFilters();
     calculateVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passengers, searchPNR, filterStatus, trainData]);
+  }, [passengers, searchPNR, searchCoach, searchBerth, filterStatus, trainData]);
 
   useEffect(() => {
     filterVacantBerths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vacantBerths, vacantFromStation, vacantToStation]);
+  }, [vacantBerths, vacantFromStation, vacantToStation, vacantBerthSearch]);
 
   const calculateVacantBerths = async () => {
     if (!trainData || !trainData.coaches || !trainData.journeyStarted) {
@@ -149,6 +151,14 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
 
   const filterVacantBerths = () => {
     let filtered = [...vacantBerths];
+
+    // Filter by berth number (e.g., S1-4, B2-37)
+    if (vacantBerthSearch.trim()) {
+      const searchTerm = vacantBerthSearch.toLowerCase();
+      filtered = filtered.filter(
+        (berth) => berth.fullBerthNo?.toLowerCase().includes(searchTerm)
+      );
+    }
 
     // Filter by "from" station (check both code and name, case-insensitive)
     if (vacantFromStation.trim()) {
@@ -223,6 +233,13 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
     if (searchCoach.trim()) {
       filtered = filtered.filter((p) =>
         p.coach?.toLowerCase().includes(searchCoach.trim().toLowerCase()),
+      );
+    }
+
+    // Search by Berth (e.g., S1-4, B2-37)
+    if (searchBerth.trim()) {
+      filtered = filtered.filter((p) =>
+        p.berth?.toLowerCase().includes(searchBerth.trim().toLowerCase()),
       );
     }
 
@@ -348,7 +365,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
               onChange={(e) => setSearchPNR(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '200px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -361,12 +378,12 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
             />
             <input
               type="text"
-              placeholder="🚂 Filter by Coach (e.g., S1, B2)..."
+              placeholder="🚂 Coach (S1, B2)..."
               value={searchCoach}
               onChange={(e) => setSearchCoach(e.target.value)}
               style={{
                 width: '100%',
-                maxWidth: '300px',
+                maxWidth: '150px',
                 padding: '10px 15px',
                 border: '2px solid #e1e8ed',
                 borderRadius: '6px',
@@ -377,7 +394,25 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
               onFocus={(e) => e.target.style.borderColor = '#3498db'}
               onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
             />
-            {(searchPNR || searchCoach) && filteredPassengers.length > 0 && (
+            <input
+              type="text"
+              placeholder="🛏️ Berth (S1-4, B2-37)..."
+              value={searchBerth}
+              onChange={(e) => setSearchBerth(e.target.value)}
+              style={{
+                width: '100%',
+                maxWidth: '180px',
+                padding: '10px 15px',
+                border: '2px solid #e1e8ed',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e1e8ed'}
+            />
+            {(searchPNR || searchCoach || searchBerth) && filteredPassengers.length > 0 && (
               <span style={{ fontSize: '13px', color: '#5a6c7d' }}>
                 {filteredPassengers.length} result(s)
               </span>
@@ -447,24 +482,32 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
           {/* Vacant Berths Filter */}
           <div className="vacant-filters">
             <div className="vacant-filter-group">
-              <label className="filter-label">🔍 Filter by Stations</label>
+              <label className="filter-label">🔍 Filter by Berth & Stations</label>
               <div className="vacant-filter-inputs">
                 <input
                   type="text"
-                  placeholder="From Station: (Enter: Station Name/Code)"
+                  placeholder="Berth: (e.g., S1-4, B2-37)"
+                  value={vacantBerthSearch}
+                  onChange={(e) => setVacantBerthSearch(e.target.value)}
+                  className="vacant-filter-input"
+                />
+                <input
+                  type="text"
+                  placeholder="From Station"
                   value={vacantFromStation}
                   onChange={(e) => setVacantFromStation(e.target.value)}
                   className="vacant-filter-input"
                 />
                 <input
                   type="text"
-                  placeholder="To Station: (Enter: Station Name/Code)"
+                  placeholder="To Station"
                   value={vacantToStation}
                   onChange={(e) => setVacantToStation(e.target.value)}
                   className="vacant-filter-input"
                 />
                 <button
                   onClick={() => {
+                    setVacantBerthSearch("");
                     setVacantFromStation("");
                     setVacantToStation("");
                   }}
@@ -579,6 +622,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                     <th className="th-gender">Gender</th>
                     <th className="th-status">Status</th>
                     <th className="th-rac">RAC Que_no</th>
+                    <th>Coach</th>
                     <th>Class</th>
                     <th>From</th>
                     <th>To</th>
@@ -603,6 +647,7 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
                         </span>
                       </td>
                       <td className="td-rac">{p.racStatus || '-'}</td>
+                      <td className="td-coach">{p.coach}</td>
                       <td className="td-class">{p.class}</td>
                       <td className="td-from">{p.from}</td>
                       <td className="td-to">{p.to}</td>

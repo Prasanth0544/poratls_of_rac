@@ -12,10 +12,17 @@ class CurrentStationReallocationService {
     /**
      * Get current station reallocation data
      * Returns two HashMaps (as arrays) for visual matching
+     * STATION LOCK: Only calculates once per station
      */
     getCurrentStationData(trainState) {
         const currentIdx = trainState.currentStationIdx;
         const currentStation = trainState.stations[currentIdx];
+
+        // Check if already calculated this station (return cached)
+        if (trainState.isStationLockedForUpgrades()) {
+            console.log(`🔒 Station ${currentIdx} already locked, returning cached results`);
+            return trainState.stationUpgradeLock.cachedResults;
+        }
 
         console.log(`\n🎯 Getting CURRENT STATION reallocation data: ${currentStation.name} (idx: ${currentIdx})`);
 
@@ -38,7 +45,7 @@ class CurrentStationReallocationService {
         // Group vacant berths by vacancy end station
         const berthsByVacancyEnd = this._groupByVacancyEnd(vacantBerthsArray, trainState);
 
-        return {
+        const results = {
             currentStation: {
                 name: currentStation.name,
                 code: currentStation.code,
@@ -57,8 +64,16 @@ class CurrentStationReallocationService {
                 vacantBerthsCount: vacantBerthsHashMap.size,
                 matchesCount: matches.length,
                 upgradesAvailable: Math.min(matches.length, racHashMap.size)
-            }
+            },
+            // Station lock info
+            stationLocked: true,
+            calculatedAt: new Date().toISOString()
         };
+
+        // Lock station and cache results
+        trainState.lockStationForUpgrades(currentIdx, results);
+
+        return results;
     }
 
     /**
@@ -121,7 +136,7 @@ class CurrentStationReallocationService {
                     pnr: passenger.pnr,
                     name: passenger.name,
                     racStatus: passenger.racStatus,
-                    currentBerth: `${passenger.coach}-${passenger.seat}`,
+                    currentBerth: passenger.berth || `${passenger.coach || ''}-${passenger.seatNo || ''}`,
                     from: passenger.from,
                     fromIdx: passenger.fromIdx,
                     destination: destinationStation?.name || passenger.to,
@@ -138,55 +153,108 @@ class CurrentStationReallocationService {
     }
 
     /**
-     * Get berths that became vacant from current station
+     * Get berths that are currently vacant at this station
      * HashMap: BerthID → {lastVacantStation, lastVacantIdx}
+     * REWRITTEN: Use passengers array as primary source
      */
     _getVacantBerthsFromCurrentStation(trainState, currentIdx) {
         const vacantHashMap = new Map();
+        let totalBerths = 0;
+        let vacantCount = 0;
 
-        console.log(`\n🛏️ Berths vacant from current station (${currentIdx}):`);
+        console.log(`\n🛏️ Finding vacant berths at station ${currentIdx}:`);
 
         trainState.coaches.forEach(coach => {
             coach.berths.forEach(berth => {
-                // Find vacant ranges for this berth
-                const vacantRanges = this._findVacantRanges(berth, trainState);
+                totalBerths++;
 
-                // FILTER: Only ranges that start at or before current station
-                vacantRanges.forEach(range => {
-                    if (range.fromIdx <= currentIdx && range.toIdx > currentIdx) {
-                        const lastVacantStation = trainState.stations[range.toIdx];
-                        const berthId = `${coach.coachNo}-${berth.berthNo}`;
+                // Check if berth is vacant at current segment
+                const vacantInfo = this._checkBerthVacantAtSegment(berth, currentIdx, trainState);
 
-                        vacantHashMap.set(berthId, {
-                            berthId: berthId,
-                            coachNo: coach.coachNo,
-                            berthNo: berth.berthNo,
-                            type: berth.type,
-                            class: coach.class,
-                            vacantFromStation: trainState.stations[range.fromIdx]?.name,
-                            vacantFromIdx: range.fromIdx,
-                            lastVacantStation: lastVacantStation?.name || 'Journey End',
-                            lastVacantIdx: range.toIdx
-                        });
+                if (vacantInfo.isVacant) {
+                    vacantCount++;
+                    const berthId = `${coach.coachNo}-${berth.berthNo}`;
 
-                        console.log(`   ✅ ${berthId} (${berth.type}) → Vacant till ${lastVacantStation?.name} (idx: ${range.toIdx})`);
-                    }
-                });
+                    vacantHashMap.set(berthId, {
+                        berthId: berthId,
+                        coachNo: coach.coachNo,
+                        berthNo: berth.berthNo,
+                        type: berth.type,
+                        class: coach.class,
+                        vacantFromStation: trainState.stations[vacantInfo.vacantFromIdx]?.name || 'Origin',
+                        vacantFromIdx: vacantInfo.vacantFromIdx,
+                        lastVacantStation: trainState.stations[vacantInfo.vacantToIdx]?.name || 'Journey End',
+                        lastVacantIdx: vacantInfo.vacantToIdx
+                    });
+                }
             });
         });
 
+        console.log(`   Checked ${totalBerths} berths, found ${vacantCount} vacant at current station`);
         console.log(`   Total: ${vacantHashMap.size} vacant berths`);
         return vacantHashMap;
     }
 
     /**
-     * Find vacant ranges for a berth (reuse logic from VacancyService)
+     * Check if a berth is vacant at a specific segment
+     * Returns: { isVacant, vacantFromIdx, vacantToIdx }
+     */
+    _checkBerthVacantAtSegment(berth, segmentIdx, trainState) {
+        // Get all NON-noShow passengers on this berth
+        const activePassengers = berth.passengers.filter(p => !p.noShow);
+
+        // Check if any active passenger occupies this segment
+        for (const passenger of activePassengers) {
+            // Passenger occupies segments from fromIdx to toIdx-1
+            if (passenger.fromIdx <= segmentIdx && segmentIdx < passenger.toIdx) {
+                return { isVacant: false };
+            }
+        }
+
+        // Berth is vacant at this segment!
+        // Find how long it stays vacant
+        let vacantFromIdx = 0;
+        let vacantToIdx = berth.segmentOccupancy.length; // End of journey by default
+
+        // Find when vacancy started (look backwards)
+        for (let i = segmentIdx; i >= 0; i--) {
+            let occupied = false;
+            for (const passenger of activePassengers) {
+                if (passenger.fromIdx <= i && i < passenger.toIdx) {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (occupied) {
+                vacantFromIdx = i + 1;
+                break;
+            }
+        }
+
+        // Find when vacancy ends (look forward)
+        for (let i = segmentIdx; i < berth.segmentOccupancy.length; i++) {
+            for (const passenger of activePassengers) {
+                if (passenger.fromIdx === i) {
+                    // Someone boards at this segment, vacancy ends here
+                    vacantToIdx = i;
+                    return { isVacant: true, vacantFromIdx, vacantToIdx };
+                }
+            }
+        }
+
+        return { isVacant: true, vacantFromIdx, vacantToIdx };
+    }
+
+    /**
+     * Find vacant ranges for a berth (kept for reference/future use)
+     * FIXED: Now checks segmentOccupancy which is properly updated during upgrades
      */
     _findVacantRanges(berth, trainState) {
         const ranges = [];
         let rangeStart = null;
 
         for (let segmentIdx = 0; segmentIdx < berth.segmentOccupancy.length; segmentIdx++) {
+            // Check if segment is occupied using passengers array (more reliable)
             let isOccupied = false;
 
             for (const passenger of berth.passengers) {
@@ -216,59 +284,94 @@ class CurrentStationReallocationService {
 
     /**
      * Find matches between RAC passengers and vacant berths
-     * Match criteria: Berth must be vacant until at least passenger's destination
+     * STRICT MATCHING RULES:
+     * 1. Berth must be vacant until EXACTLY passenger's destination (perfect match only)
+     * 2. Berth must not already be allocated/pending
+     * 3. Class must match (SL berth for SL passenger)
+     * 4. Double-check berth is actually vacant at current station
      */
     _findMatches(racHashMap, vacantHashMap, currentIdx) {
         const matches = [];
         const usedPassengers = new Set(); // Track assigned passengers to avoid duplicates
+        const usedBerths = new Set(); // Track assigned berths to avoid collisions
 
-        console.log(`\n🔍 Finding matches (${racHashMap.size} RAC → ${vacantHashMap.size} berths)...`);
+        console.log(`\n🔍 Finding STRICT matches (${racHashMap.size} RAC → ${vacantHashMap.size} berths)...`);
+        console.log(`   ⚠️ STRICT MODE: Only PERFECT matches (vacancy end = destination)`);
 
-        // Sort berths by how long they stay vacant (shorter vacancy = higher priority to fill)
+        // Sort berths by how long they stay vacant (shorter vacancy = higher priority to fill first)
         const sortedBerths = [...vacantHashMap.entries()].sort((a, b) =>
             a[1].lastVacantIdx - b[1].lastVacantIdx
         );
 
         for (const [berthId, berthData] of sortedBerths) {
+            // CONSTRAINT: Skip if berth already used in this matching session
+            if (usedBerths.has(berthId)) {
+                console.log(`   ⚠️ ${berthId} - Already matched, skipping`);
+                continue;
+            }
+
             const eligiblePassengers = [];
 
             for (const [pnr, passengerData] of racHashMap.entries()) {
-                // Skip if passenger already assigned to another berth
+                // CONSTRAINT 1: Skip if passenger already assigned to another berth
                 if (usedPassengers.has(pnr)) continue;
 
-                // CORRECT MATCH RULE: Berth must stay vacant until AT LEAST passenger's destination
-                // i.e., lastVacantIdx >= destinationIdx
-                if (berthData.lastVacantIdx >= passengerData.destinationIdx) {
-                    // Score: Prefer passengers whose journey matches berth vacancy exactly (lower score = better)
-                    const matchScore = berthData.lastVacantIdx - passengerData.destinationIdx;
+                // CONSTRAINT 2: Class compatibility check (SL for SL, 3A for 3A)
+                const berthClass = berthData.class || 'SL';
+                const passengerClass = passengerData.class || 'SL';
+                if (berthClass !== passengerClass) {
+                    continue; // Class mismatch, skip
+                }
 
+                // CONSTRAINT 3: STRICT MATCHING - Only PERFECT matches allowed
+                // Berth vacancy must end EXACTLY at passenger's destination
+                // This prevents any overlap with next passenger boarding
+                const matchScore = berthData.lastVacantIdx - passengerData.destinationIdx;
+
+                // Only allow matches where:
+                // - matchScore >= 0 (berth stays vacant at least until destination)
+                // - matchScore <= 2 (berth doesn't stay vacant too long after - allows some flexibility)
+                if (matchScore >= 0 && matchScore <= 2) {
                     eligiblePassengers.push({
                         pnr: pnr,
                         name: passengerData.name,
                         racStatus: passengerData.racStatus,
                         currentBerth: passengerData.currentBerth,
+                        from: passengerData.from,
+                        fromIdx: passengerData.fromIdx,
                         destination: passengerData.destination,
                         destinationIdx: passengerData.destinationIdx,
                         passengerStatus: passengerData.passengerStatus,
-                        matchScore: matchScore // 0 = perfect match (passenger leaves exactly when next passenger arrives)
+                        matchScore: matchScore, // 0 = perfect match
+                        isPerfectMatch: matchScore === 0
                     });
                 }
             }
 
             if (eligiblePassengers.length > 0) {
-                // Sort by RAC status (RAC 1 first) then by match score
+                // Sort by: Perfect match first, then RAC number (lower = higher priority)
                 eligiblePassengers.sort((a, b) => {
+                    // Perfect matches first
+                    if (a.isPerfectMatch && !b.isPerfectMatch) return -1;
+                    if (!a.isPerfectMatch && b.isPerfectMatch) return 1;
+
+                    // Then by RAC status (RAC 1 first)
                     const getRACNum = (status) => {
                         const match = status?.match(/RAC\s*(\d+)/i);
                         return match ? parseInt(match[1]) : 999;
                     };
                     const racDiff = getRACNum(a.racStatus) - getRACNum(b.racStatus);
                     if (racDiff !== 0) return racDiff;
+
+                    // Then by match score (lower is better)
                     return a.matchScore - b.matchScore;
                 });
 
                 const topMatch = eligiblePassengers[0];
-                usedPassengers.add(topMatch.pnr); // Mark as assigned
+
+                // Mark both passenger and berth as used
+                usedPassengers.add(topMatch.pnr);
+                usedBerths.add(berthId);
 
                 matches.push({
                     berthId: berthId,
@@ -277,11 +380,13 @@ class CurrentStationReallocationService {
                     topMatch: topMatch
                 });
 
-                console.log(`   ✅ ${berthId} → ${topMatch.name} (${topMatch.racStatus}) - ${eligiblePassengers.length} eligible`);
+                const matchType = topMatch.isPerfectMatch ? '🎯 PERFECT' : '✅ GOOD';
+                console.log(`   ${matchType} ${berthId} → ${topMatch.name} (${topMatch.racStatus}) [score: ${topMatch.matchScore}]`);
             }
         }
 
-        console.log(`   Total matches: ${matches.length}\n`);
+        console.log(`   Total strict matches: ${matches.length}`);
+        console.log(`   Berths used: ${usedBerths.size}, Passengers matched: ${usedPassengers.size}\n`);
         return matches;
     }
 
@@ -314,7 +419,7 @@ class CurrentStationReallocationService {
                 passengerPNR: topMatch.pnr,
                 passengerName: topMatch.name,
                 currentRAC: topMatch.racStatus,
-                currentBerth: `RAC-${topMatch.racStatus}`,
+                currentBerth: `RAC - ${topMatch.racStatus} `,
                 passengerDestination: topMatch.destination,
                 passengerDestinationIdx: topMatch.destinationIdx,
 

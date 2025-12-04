@@ -27,8 +27,10 @@ self.addEventListener('push', (event) => {
         body: data.body || 'You have a new notification',
         icon: '/logo192.png',
         badge: '/badge72.png',
-        tag: data.tag || 'notification',
+        // Use unique tag with timestamp so repeated notifications show up
+        tag: data.tag ? `${data.tag}-${Date.now()}` : `notification-${Date.now()}`,
         requireInteraction: true,
+        renotify: true, // This ensures notification shows even if same tag
         data: {
             url: data.url || 'http://localhost:5175',
             pnr: data.pnr

@@ -822,7 +822,7 @@ print("="*80)
 try:
     client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=2000)
     db = client['PassengersDB']
-    coll = db['L_2']
+    coll = db['L_4']
     
     # Clear existing data
     deleted_count = coll.delete_many({}).deleted_count

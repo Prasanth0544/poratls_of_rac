@@ -100,6 +100,12 @@ export const tteAPI = {
         return response.data;
     },
 
+    // Get upgraded passengers (RAC → CNF) from MongoDB
+    getUpgradedPassengers: async () => {
+        const response = await api.get('/tte/upgraded-passengers');
+        return response.data;
+    },
+
     // Train operations
     moveNextStation: async () => {
         const response = await api.post('/train/next-station');

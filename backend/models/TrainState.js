@@ -36,6 +36,19 @@ class TrainState {
     this.actionHistory = []; // Action history for undo
     this.MAX_HISTORY_SIZE = 10; // Keep last 10 actions
     this.autoConfirmTimeout = null; // Timer for auto-confirmation
+
+    // Station Upgrade Lock - Controls per-station upgrade flow
+    this.stationUpgradeLock = {
+      locked: false,                      // Is upgrade calculation locked?
+      lockedAtStation: null,              // Station where lock was applied
+      matchesCalculatedAt: null,          // Timestamp of calculation
+      cachedResults: null,                // Cached upgrade matches
+      pendingUpgrades: [],                // Upgrades awaiting TTE approval
+      completedUpgrades: [],              // Approved upgrades this station
+      rejectedUpgrades: [],               // Rejected upgrades this station
+      usedBerths: new Set(),              // Berths already matched/upgraded
+      usedPassengers: new Set()           // Passengers already matched/upgraded
+    };
   }
 
   /**
@@ -128,6 +141,8 @@ class TrainState {
 
     // Board all passengers at the origin station (idx 0)
     let boardedCount = 0;
+
+    // Board CNF passengers from berths
     this.coaches.forEach(coach => {
       coach.berths.forEach(berth => {
         berth.passengers.forEach(p => {
@@ -140,11 +155,20 @@ class TrainState {
       });
     });
 
+    // ✅ ALSO board RAC passengers from racQueue
+    let racBoardedCount = 0;
+    this.racQueue.forEach(rac => {
+      if (rac.fromIdx === 0 && !rac.boarded && !rac.noShow) {
+        rac.boarded = true;
+        racBoardedCount++;
+      }
+    });
+
     // Update statistics after boarding
     this.updateStats();
 
-    console.log(`🚂 Journey Started: ${boardedCount} passengers boarded at origin`);
-    this.logEvent('JOURNEY_STARTED', `Journey started - ${boardedCount} passengers boarded at origin`);
+    console.log(`🚂 Journey Started: ${boardedCount} CNF + ${racBoardedCount} RAC passengers boarded at origin`);
+    this.logEvent('JOURNEY_STARTED', `Journey started - ${boardedCount + racBoardedCount} passengers boarded at origin`);
   }
 
   /**
@@ -597,13 +621,21 @@ class TrainState {
    * For passengers who are already boarded (not in verification queue)
    */
   async markBoardedPassengerNoShow(pnr) {
-    const result = this.findPassenger(pnr);
+    // First try to find in berths
+    let result = this.findPassenger(pnr);
+    let passenger = result?.passenger;
 
-    if (!result) {
+    // Also check racQueue for RAC passengers
+    const racPassenger = this.racQueue.find(r => r.pnr === pnr);
+
+    if (!passenger && !racPassenger) {
       throw new Error(`Passenger with PNR ${pnr} not found`);
     }
 
-    const { passenger } = result;
+    // Use the passenger object we found (prefer berth passenger if both exist)
+    if (!passenger && racPassenger) {
+      passenger = racPassenger;
+    }
 
     if (!passenger.boarded) {
       throw new Error(`Passenger ${pnr} is not boarded`);
@@ -611,9 +643,16 @@ class TrainState {
 
     console.log(`❌ Marking boarded passenger ${pnr} as NO_SHOW`);
 
-    // Update in-memory state
+    // Update in-memory state (berth passenger)
     passenger.noShow = true;
     passenger.boarded = false;
+
+    // ALSO update racQueue if this is a RAC passenger
+    if (racPassenger) {
+      racPassenger.noShow = true;
+      racPassenger.boarded = false;
+      console.log(`   ✅ Also updated racQueue for ${pnr}`);
+    }
 
     // Update in database
     const db = require('../config/db');
@@ -652,13 +691,21 @@ class TrainState {
    * Checks for berth collision before allowing revert
    */
   async revertBoardedPassengerNoShow(pnr) {
-    const result = this.findPassenger(pnr);
+    // First try to find in berths
+    let result = this.findPassenger(pnr);
+    let passenger = result?.passenger;
 
-    if (!result) {
+    // Also check racQueue for RAC passengers
+    const racPassenger = this.racQueue.find(r => r.pnr === pnr);
+
+    if (!passenger && !racPassenger) {
       throw new Error(`Passenger with PNR ${pnr} not found`);
     }
 
-    const { passenger } = result;
+    // Use the passenger object we found (prefer berth passenger if both exist)
+    if (!passenger && racPassenger) {
+      passenger = racPassenger;
+    }
 
     if (!passenger.noShow) {
       throw new Error(`Passenger ${pnr} is not marked as NO-SHOW`);
@@ -672,10 +719,18 @@ class TrainState {
 
     console.log(`✅ Reverting NO-SHOW status for ${pnr}`);
 
-    // Update in-memory state
+    // Update in-memory state (berth passenger)
     passenger.noShow = false;
     passenger.boarded = true;
     passenger.noShowRevertedAt = new Date();
+
+    // ALSO update racQueue if this is a RAC passenger
+    if (racPassenger) {
+      racPassenger.noShow = false;
+      racPassenger.boarded = true;
+      racPassenger.noShowRevertedAt = new Date();
+      console.log(`   ✅ Also updated racQueue for ${pnr}`);
+    }
 
     // Update in database
     const db = require('../config/db');
@@ -1057,6 +1112,155 @@ class TrainState {
   getActionHistory() {
     // Return most recent first
     return [...this.actionHistory].reverse();
+  }
+
+  // ========== STATION UPGRADE LOCK METHODS ==========
+
+  /**
+   * Lock station for upgrades (called when upgrades are calculated)
+   */
+  lockStationForUpgrades(stationIdx, results) {
+    this.stationUpgradeLock = {
+      locked: true,
+      lockedAtStation: stationIdx,
+      matchesCalculatedAt: new Date(),
+      cachedResults: results,
+      pendingUpgrades: results?.matches || [],
+      completedUpgrades: [],
+      rejectedUpgrades: [],
+      usedBerths: new Set(),
+      usedPassengers: new Set()
+    };
+
+    console.log(`🔒 Station ${stationIdx} locked for upgrades. ${results?.matches?.length || 0} pending.`);
+  }
+
+  /**
+   * Check if station is locked for upgrades
+   */
+  isStationLockedForUpgrades() {
+    return this.stationUpgradeLock.locked &&
+      this.stationUpgradeLock.lockedAtStation === this.currentStationIdx;
+  }
+
+  /**
+   * Get upgrade lock status
+   */
+  getUpgradeLockStatus() {
+    return {
+      locked: this.stationUpgradeLock.locked,
+      lockedAtStation: this.stationUpgradeLock.lockedAtStation,
+      currentStation: this.currentStationIdx,
+      pendingCount: this.stationUpgradeLock.pendingUpgrades.length,
+      completedCount: this.stationUpgradeLock.completedUpgrades.length,
+      rejectedCount: this.stationUpgradeLock.rejectedUpgrades.length,
+      calculatedAt: this.stationUpgradeLock.matchesCalculatedAt
+    };
+  }
+
+  /**
+   * Unlock station for upgrades (called when train moves to next station)
+   */
+  unlockStationForUpgrades() {
+    const previousStation = this.stationUpgradeLock.lockedAtStation;
+
+    this.stationUpgradeLock = {
+      locked: false,
+      lockedAtStation: null,
+      matchesCalculatedAt: null,
+      cachedResults: null,
+      pendingUpgrades: [],
+      completedUpgrades: [],
+      rejectedUpgrades: [],
+      usedBerths: new Set(),
+      usedPassengers: new Set()
+    };
+
+    console.log(`🔓 Station upgrade lock released (was station ${previousStation})`);
+  }
+
+  /**
+   * Mark a berth as used for upgrade (prevents double allocation)
+   */
+  markBerthUsedForUpgrade(berthId) {
+    this.stationUpgradeLock.usedBerths.add(berthId);
+  }
+
+  /**
+   * Check if berth is already used for upgrade
+   */
+  isBerthUsedForUpgrade(berthId) {
+    return this.stationUpgradeLock.usedBerths.has(berthId);
+  }
+
+  /**
+   * Mark a passenger as upgraded (prevents double upgrade)
+   */
+  markPassengerUpgraded(pnr) {
+    this.stationUpgradeLock.usedPassengers.add(pnr);
+  }
+
+  /**
+   * Check if passenger already upgraded
+   */
+  isPassengerAlreadyUpgraded(pnr) {
+    return this.stationUpgradeLock.usedPassengers.has(pnr);
+  }
+
+  /**
+   * Add pending upgrade (for TTE approval)
+   */
+  addPendingUpgrade(upgrade) {
+    const upgradeWithId = {
+      ...upgrade,
+      upgradeId: `UPG-${Date.now()}-${upgrade.pnr}`,
+      status: 'pending',
+      createdAt: new Date()
+    };
+    this.stationUpgradeLock.pendingUpgrades.push(upgradeWithId);
+    return upgradeWithId;
+  }
+
+  /**
+   * Complete an upgrade (approved by TTE)
+   */
+  completeUpgrade(upgradeId) {
+    const idx = this.stationUpgradeLock.pendingUpgrades.findIndex(u => u.upgradeId === upgradeId);
+    if (idx === -1) return null;
+
+    const upgrade = this.stationUpgradeLock.pendingUpgrades.splice(idx, 1)[0];
+    upgrade.status = 'approved';
+    upgrade.approvedAt = new Date();
+
+    this.stationUpgradeLock.completedUpgrades.push(upgrade);
+    this.markBerthUsedForUpgrade(upgrade.berthId);
+    this.markPassengerUpgraded(upgrade.pnr);
+
+    return upgrade;
+  }
+
+  /**
+   * Reject an upgrade
+   */
+  rejectUpgrade(upgradeId, reason = '') {
+    const idx = this.stationUpgradeLock.pendingUpgrades.findIndex(u => u.upgradeId === upgradeId);
+    if (idx === -1) return null;
+
+    const upgrade = this.stationUpgradeLock.pendingUpgrades.splice(idx, 1)[0];
+    upgrade.status = 'rejected';
+    upgrade.rejectedAt = new Date();
+    upgrade.rejectionReason = reason;
+
+    this.stationUpgradeLock.rejectedUpgrades.push(upgrade);
+
+    return upgrade;
+  }
+
+  /**
+   * Get pending upgrades for TTE
+   */
+  getPendingUpgrades() {
+    return this.stationUpgradeLock.pendingUpgrades;
   }
 }
 

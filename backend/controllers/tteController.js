@@ -958,6 +958,61 @@ class TTEController {
     }
 
     /**
+     * Get upgraded passengers (RAC → CNF)
+     * Queries MongoDB for passengers with Upgraded_From = 'RAC'
+     * GET /api/tte/upgraded-passengers
+     */
+    async getUpgradedPassengers(req, res) {
+        try {
+            // Get the CURRENT passengers collection (dynamically switched)
+            const passengersCollection = db.getPassengersCollection();
+            const config = db.getConfig();
+
+            console.log(`📊 Querying upgraded passengers from: ${config.passengersDb}.${config.passengersCollection}`);
+
+            // Query MongoDB for passengers upgraded from RAC
+            const upgradedPassengers = await passengersCollection.find({
+                Upgraded_From: 'RAC'
+            }).toArray();
+
+            console.log(`   Found ${upgradedPassengers.length} upgraded passengers`);
+
+            res.json({
+                success: true,
+                data: {
+                    collection: config.passengersCollection, // Include collection name in response
+                    count: upgradedPassengers.length,
+                    passengers: upgradedPassengers.map(p => ({
+                        pnr: p.PNR_Number,
+                        name: p.Name,
+                        age: p.Age,
+                        gender: p.Gender,
+                        mobile: p.Mobile,
+                        email: p.Email,
+                        pnrStatus: p.PNR_Status,
+                        previousRacStatus: p.Rac_status,
+                        coach: p.Assigned_Coach,
+                        berth: p.Assigned_berth,
+                        berthType: p.Berth_Type,
+                        class: p.Class,
+                        from: p.Boarding_Station,
+                        to: p.Deboarding_Station,
+                        boarded: p.Boarded,
+                        upgradedFrom: p.Upgraded_From
+                    }))
+                }
+            });
+        } catch (error) {
+            console.error("❌ Error getting upgraded passengers:", error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to get upgraded passengers",
+                error: error.message
+            });
+        }
+    }
+
+    /**
      * ===== OFFLINE UPGRADE MANAGEMENT =====
      * For passengers who are offline when upgrade offer is sent
      */

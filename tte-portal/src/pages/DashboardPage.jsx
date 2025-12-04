@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { tteAPI } from '../api';
 import { subscribeTTEToPush } from '../utils/pushManager';
+import JourneyTimeline from '../components/JourneyTimeline';
 import './DashboardPage.css';
 
 function DashboardPage() {
@@ -109,46 +110,49 @@ function DashboardPage() {
                 </div>
             )}
 
-            {/* Statistics Grid */}
+            {/* Journey Timeline - NEW */}
+            {trainState?.stations && (
+                <JourneyTimeline
+                    stations={trainState.stations}
+                    currentStationIndex={trainState.currentStationIdx || 0}
+                />
+            )}
+
+            {/* Statistics Grid - Matching Homepage Style */}
             <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon primary">👥</div>
+                <div className="stat-box">
+                    <div className="stat-label">TOTAL PASSENGERS</div>
                     <div className="stat-value">{stats.total}</div>
-                    <div className="stat-label">Total Passengers</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-icon success">✅</div>
+                <div className="stat-box">
+                    <div className="stat-label">BOARDED</div>
                     <div className="stat-value success">{stats.boarded}</div>
-                    <div className="stat-label">Boarded</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-icon warning">⏳</div>
+                <div className="stat-box">
+                    <div className="stat-label">PENDING</div>
                     <div className="stat-value warning">{stats.pending}</div>
-                    <div className="stat-label">Pending</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-icon danger">❌</div>
+                <div className="stat-box">
+                    <div className="stat-label">NO-SHOW</div>
                     <div className="stat-value danger">{stats.noShow}</div>
-                    <div className="stat-label">No-Show</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-value">{stats.cnf}</div>
+                <div className="stat-box">
                     <div className="stat-label">CNF</div>
+                    <div className="stat-value">{stats.cnf}</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-value">{stats.rac}</div>
+                <div className="stat-box">
                     <div className="stat-label">RAC</div>
+                    <div className="stat-value">{stats.rac}</div>
                 </div>
 
-                <div className="stat-card">
-                    <div className="stat-icon success">⬆️</div>
+                <div className="stat-box">
+                    <div className="stat-label">UPGRADED</div>
                     <div className="stat-value success">{trainState?.stats?.totalRACUpgraded || 0}</div>
-                    <div className="stat-label">Upgraded</div>
                 </div>
             </div>
 
@@ -222,43 +226,7 @@ function DashboardPage() {
                 </div>
             </div>
 
-            {/* Quick Actions & Navigation - Matching Homepage Style */}
-            <div className="action-cards-section">
-                <h3 className="section-title">📊 Quick Statistics & Navigation</h3>
 
-                <div className="stats-action-grid">
-                    {/* Navigation Cards matching homepage */}
-                    <div className="nav-card" onClick={() => window.location.href = '#/passengers'}>
-                        <span className="nav-icon">👤➕</span>
-                        <span className="nav-text">Add Passenger</span>
-                    </div>
-
-                    <div className="nav-card" onClick={() => window.location.href = '#/passengers'}>
-                        <span className="nav-icon">🚂</span>
-                        <span className="nav-text">Coaches & Berths</span>
-                    </div>
-
-                    <div className="nav-card" onClick={() => window.location.href = '#/passengers'}>
-                        <span className="nav-icon">👥</span>
-                        <span className="nav-text">Passenger List & Vacant Positions</span>
-                    </div>
-
-                    <div className="nav-card" onClick={() => window.location.href = '#/offline-upgrades'}>
-                        <span className="nav-icon">📊</span>
-                        <span className="nav-text">Segment View</span>
-                    </div>
-
-                    <div className="nav-card" onClick={() => window.location.href = '#/action-history'}>
-                        <span className="nav-icon">⚙️</span>
-                        <span className="nav-text">Update Config</span>
-                    </div>
-
-                    <div className="nav-card" onClick={() => window.location.href = '#/action-history'}>
-                        <span className="nav-icon">🔍</span>
-                        <span className="nav-text">Allocation Diagnostics</span>
-                    </div>
-                </div>
-            </div>
 
             {/* Quick Tip */}
             <div className="quick-tip-box">

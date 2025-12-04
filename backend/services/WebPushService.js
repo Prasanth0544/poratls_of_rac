@@ -33,7 +33,8 @@ class WebPushService {
             return { success: false, error: 'IRCTC ID required' };
         }
 
-        const subscriptions = PushSubscriptionService.getSubscriptions(irctcId);
+        // Now uses async MongoDB queries
+        const subscriptions = await PushSubscriptionService.getSubscriptions(irctcId);
 
         if (subscriptions.length === 0) {
             console.log(`ℹ️  No push subscriptions for ${irctcId}`);
@@ -60,7 +61,7 @@ class WebPushService {
                 // Remove subscription if it's expired or invalid
                 if (error.statusCode === 410 || error.statusCode === 404) {
                     console.log(`   🗑️  Removing invalid subscription`);
-                    PushSubscriptionService.removeSubscription(irctcId, subscription.endpoint);
+                    await PushSubscriptionService.deleteSubscription(subscription.endpoint);
                 }
 
                 results.push({
@@ -147,7 +148,7 @@ class WebPushService {
      * Send push to ALL TTE portals (for offline passenger upgrades)
      */
     async sendPushToAllTTEs(payload) {
-        const subscriptions = PushSubscriptionService.getAllTTESubscriptions();
+        const subscriptions = await PushSubscriptionService.getAllTTESubscriptions();
 
         if (subscriptions.length === 0) {
             console.log('⚠️  No TTE subscriptions');

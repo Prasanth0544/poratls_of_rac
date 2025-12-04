@@ -41,17 +41,17 @@ const PhaseOnePage = ({ onClose }) => {
 
   const fetchUpgradedPassengers = async () => {
     try {
-      const res = await apiClient.get('/passengers/all');
+      // Fetch upgraded passengers from current dynamic collection
+      // This endpoint queries the CURRENT passengers collection for Upgraded_From: 'RAC'
+      const res = await apiClient.get('/tte/upgraded-passengers');
       if (res.data && res.data.success) {
         const passengers = res.data.data?.passengers || [];
-        const upgraded = passengers.filter(p =>
-          p.upgradedFrom === 'RAC' ||
-          (p.pnrStatus === 'CNF' && p.racStatus && p.racStatus !== '-')
-        );
-        setUpgradedPassengers(upgraded);
+        console.log(`Upgraded passengers from collection: ${res.data.data?.collection}`);
+        setUpgradedPassengers(passengers);
       }
     } catch (error) {
       console.error('Error fetching upgraded passengers:', error);
+      setUpgradedPassengers([]);
     }
   };
 
@@ -160,31 +160,45 @@ const PhaseOnePage = ({ onClose }) => {
             <h3>👥 RAC Passengers</h3>
             <span className="count-badge">{racPassengers?.length || 0}</span>
           </div>
-          <div className="data-table rac-table">
-            <div className="table-header">
-              <span>RAC #</span>
-              <span>PNR</span>
-              <span>Name</span>
-              <span>Destination</span>
-              <span>Status</span>
-            </div>
-            <div className="table-body">
-              {(!racPassengers || racPassengers.length === 0) ? (
-                <div className="empty-message">No boarded RAC passengers</div>
-              ) : (
-                racPassengers.map((p, idx) => (
-                  <div key={p.pnr || idx} className="table-row rac-row">
-                    <span className="rac-badge">{p.racStatus}</span>
-                    <span className="pnr">{p.pnr}</span>
-                    <span className="name">{p.name}</span>
-                    <span className="destination">{p.destination}</span>
-                    <span className={`status ${p.passengerStatus?.toLowerCase()}`}>
-                      {p.passengerStatus}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="table-container">
+            {(!racPassengers || racPassengers.length === 0) ? (
+              <div className="empty-state">
+                <p>No boarded RAC passengers</p>
+              </div>
+            ) : (
+              <table className="pass-table rac-passengers-table">
+                <thead>
+                  <tr>
+                    <th>RAC #</th>
+                    <th>PNR</th>
+                    <th>Name</th>
+                    <th>Berth</th>
+                    <th>Destination</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {racPassengers.map((p, idx) => (
+                    <tr key={p.pnr || idx}>
+                      <td className="td-rac">
+                        <span className="badge rac">{p.racStatus}</span>
+                      </td>
+                      <td className="td-pnr">{p.pnr}</td>
+                      <td className="td-name">{p.name}</td>
+                      <td className="td-berth">
+                        {p.currentBerth || '-'}
+                      </td>
+                      <td className="td-destination">{p.destination}</td>
+                      <td className="td-status">
+                        <span className={`badge ${p.passengerStatus?.toLowerCase()}`}>
+                          {p.passengerStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
@@ -196,27 +210,37 @@ const PhaseOnePage = ({ onClose }) => {
             <h3>🛏️ Vacant Berths</h3>
             <span className="count-badge">{vacantBerths?.length || 0}</span>
           </div>
-          <div className="data-table vacant-table">
-            <div className="table-header">
-              <span>Berth</span>
-              <span>Type</span>
-              <span>Class</span>
-              <span>Vacant Till</span>
-            </div>
-            <div className="table-body">
-              {(!vacantBerths || vacantBerths.length === 0) ? (
-                <div className="empty-message">No vacant berths available</div>
-              ) : (
-                vacantBerths.map((b, idx) => (
-                  <div key={b.berthId || idx} className="table-row berth-row">
-                    <span className="berth-id">{b.berthId}</span>
-                    <span className="berth-type">{b.type}</span>
-                    <span className="berth-class">{b.class}</span>
-                    <span className="vacant-till">{b.lastVacantStation}</span>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="table-container">
+            {(!vacantBerths || vacantBerths.length === 0) ? (
+              <div className="empty-state">
+                <p>No vacant berths available</p>
+              </div>
+            ) : (
+              <table className="pass-table vacant-berths-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Berth ID</th>
+                    <th>Type</th>
+                    <th>Class</th>
+                    <th>Vacant From</th>
+                    <th>Vacant Till</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vacantBerths.map((b, idx) => (
+                    <tr key={b.berthId || idx}>
+                      <td className="td-no">{idx + 1}</td>
+                      <td className="td-berth-id">{b.berthId}</td>
+                      <td className="td-type">{b.type}</td>
+                      <td className="td-class">{b.class}</td>
+                      <td className="td-station">{b.vacantFromStation || 'Origin'}</td>
+                      <td className="td-station">{b.lastVacantStation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
@@ -236,36 +260,50 @@ const PhaseOnePage = ({ onClose }) => {
             </button>
           </div>
 
-          {matches && matches.length > 0 ? (
-            <div className="data-table matches-table">
-              <div className="table-header">
-                <span>#</span>
-                <span>RAC Passenger</span>
-                <span>→</span>
-                <span>Upgrade Berth</span>
-                <span>Berth Type</span>
+          <div className="table-container">
+            {matches && matches.length > 0 ? (
+              <table className="pass-table upgrades-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>RAC Status</th>
+                    <th>Passenger Name</th>
+                    <th>PNR</th>
+                    <th>→</th>
+                    <th>Upgrade Berth</th>
+                    <th>Berth Type</th>
+                    <th>Match</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matches.map((match, idx) => (
+                    <tr key={idx}>
+                      <td className="td-no">{idx + 1}</td>
+                      <td className="td-rac">
+                        <span className="badge rac">{match.topMatch?.racStatus}</span>
+                      </td>
+                      <td className="td-name">{match.topMatch?.name}</td>
+                      <td className="td-pnr">{match.topMatch?.pnr}</td>
+                      <td className="td-arrow">→</td>
+                      <td className="td-berth-upgrade">{match.berthId}</td>
+                      <td className="td-type">{match.berth?.type}</td>
+                      <td className="td-match">
+                        <span className={`badge ${match.topMatch?.isPerfectMatch ? 'perfect' : 'good'}`}>
+                          {match.topMatch?.isPerfectMatch ? '✓ Perfect' : '○ Good'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">🔍</div>
+                <h3>No Upgrades Available</h3>
+                <p>No berths match RAC passenger destinations.</p>
               </div>
-              <div className="table-body">
-                {matches.map((match, idx) => (
-                  <div key={idx} className="table-row match-row">
-                    <span className="match-num">{idx + 1}</span>
-                    <span className="passenger-info">
-                      <strong>{match.topMatch?.racStatus}</strong>: {match.topMatch?.name}
-                    </span>
-                    <span className="arrow">→</span>
-                    <span className="berth-info">{match.berthId}</span>
-                    <span className="berth-type">{match.berth?.type}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">🔍</div>
-              <h3>No Upgrades Available</h3>
-              <p>No berths match RAC passenger destinations.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -277,45 +315,48 @@ const PhaseOnePage = ({ onClose }) => {
             <span className="count-badge success">{upgradedPassengers.length}</span>
           </div>
 
-          {upgradedPassengers.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📋</div>
-              <h3>No Upgrades Yet</h3>
-              <p>Passengers appear here after TTE approval.</p>
-            </div>
-          ) : (
-            <div className="upgraded-grid">
-              {upgradedPassengers.map((p, idx) => (
-                <div key={p.pnr || idx} className="upgraded-card">
-                  <div className="card-header">
-                    <h4>{p.name}</h4>
-                    <span className="status-badge cnf">CNF</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="detail-row">
-                      <span className="label">PNR</span>
-                      <span className="value">{p.pnr}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="label">Previous</span>
-                      <span className="value previous">RAC {p.racStatus || ''}</span>
-                    </div>
-                    <div className="detail-row highlight">
-                      <span className="label">New Berth</span>
-                      <span className="value proposed">{p.coach || p.assignedCoach}-{p.berth || p.assignedBerth}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="label">Journey</span>
-                      <span className="value">{p.from} → {p.to}</span>
-                    </div>
-                  </div>
-                  <div className="card-footer">
-                    <span className="upgrade-badge">🎉 Upgraded</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="table-container">
+            {upgradedPassengers.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📋</div>
+                <h3>No Upgrades Yet</h3>
+                <p>Passengers appear here after TTE approval.</p>
+              </div>
+            ) : (
+              <table className="pass-table upgraded-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Passenger Name</th>
+                    <th>PNR</th>
+                    <th>Previous Status</th>
+                    <th>New Berth</th>
+                    <th>Journey</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upgradedPassengers.map((p, idx) => (
+                    <tr key={p.pnr || idx} className="upgraded-row">
+                      <td className="td-no">{idx + 1}</td>
+                      <td className="td-name">{p.name}</td>
+                      <td className="td-pnr">{p.pnr}</td>
+                      <td className="td-previous">
+                        <span className="badge rac">RAC {p.racStatus || ''}</span>
+                      </td>
+                      <td className="td-new-berth">
+                        {p.coach || p.assignedCoach}-{p.berth || p.assignedBerth}
+                      </td>
+                      <td className="td-journey">{p.from} → {p.to}</td>
+                      <td className="td-status">
+                        <span className="badge cnf">✓ CNF</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
     </div>

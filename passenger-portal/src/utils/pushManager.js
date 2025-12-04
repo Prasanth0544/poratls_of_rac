@@ -35,25 +35,26 @@ export async function requestPushPermission(irctcId) {
         console.log('✅ Service Worker ready');
 
         // Get VAPID public key from backend
-        const response = await fetch('http://localhost:5000/api/push/vapid-public-key');
-        const { publicKey } = await response.json();
+        const vapidResponse = await fetch('http://localhost:5000/api/push/vapid-public-key');
+        const { publicKey } = await vapidResponse.json();
 
         // Check existing subscription
         let subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            console.log('✅ Already subscribed to push');
+            console.log('✅ Found existing push subscription');
         } else {
             // Subscribe to push notifications
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(publicKey)
             });
-            console.log('✅ Subscribed to push notifications');
+            console.log('✅ Created new push subscription');
         }
 
-        // Send subscription to backend
-        await fetch('http://localhost:5000/api/passenger/push-subscribe', {
+        // ALWAYS send subscription to backend (it uses upsert in MongoDB)
+        console.log('📤 Sending subscription to backend for:', irctcId);
+        const response = await fetch('http://localhost:5000/api/passenger/push-subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -62,7 +63,12 @@ export async function requestPushPermission(irctcId) {
             })
         });
 
-        console.log('✅ Push subscription registered with backend');
+        const result = await response.json();
+        if (result.success) {
+            console.log('✅ Push subscription registered with backend (MongoDB)');
+        } else {
+            console.error('❌ Backend rejected subscription:', result.message);
+        }
         return true;
 
     } catch (error) {

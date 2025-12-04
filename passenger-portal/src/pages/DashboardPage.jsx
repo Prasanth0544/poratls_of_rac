@@ -13,11 +13,19 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Button
+    Button,
+    IconButton,
+    Menu,
+    MenuItem,
+    Divider
 } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import BoardingPass from '../components/BoardingPass';
 import JourneyTimeline from '../components/JourneyTimeline';
 import NotificationSettings from '../components/NotificationSettings';
+import { requestPushPermission } from '../utils/pushManager';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
@@ -29,6 +37,27 @@ function DashboardPage() {
     const [error, setError] = useState(null);
     const [upgradeOffer, setUpgradeOffer] = useState(null);
     const [reverting, setReverting] = useState(false);
+    const [settingsAnchor, setSettingsAnchor] = useState(null);
+    const [showSettings, setShowSettings] = useState(false);
+
+    const handleSettingsClick = (event) => {
+        setSettingsAnchor(event.currentTarget);
+    };
+
+    const handleSettingsClose = () => {
+        setSettingsAnchor(null);
+    };
+
+    const handleOpenSettings = () => {
+        setShowSettings(true);
+        handleSettingsClose();
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/';
+    };
 
     useEffect(() => {
         fetchData();
@@ -59,10 +88,10 @@ function DashboardPage() {
             }
         };
 
-        // Auto-refresh every 10 seconds
+        // Auto-refresh every 2 minutes (120 seconds)
         const refreshInterval = setInterval(() => {
             fetchData();
-        }, 10000);
+        }, 120000);
 
         return () => {
             ws.close();
@@ -191,14 +220,65 @@ function DashboardPage() {
 
     return (
         <Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 }, mb: { xs: 2, md: 4 }, px: { xs: 2, sm: 3, md: 4 } }}>
-            <Box sx={{ mb: 4, textAlign: 'center' }}>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-                    Welcome, {passenger?.Name || 'Passenger'}!
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    Your digital boarding pass is ready
-                </Typography>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ textAlign: 'center', flex: 1 }}>
+                    <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+                        Welcome, {passenger?.Name || 'Passenger'}!
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        Your digital boarding pass is ready
+                    </Typography>
+                </Box>
+
+                {/* Settings Menu - Three Dots */}
+                <IconButton
+                    onClick={handleSettingsClick}
+                    sx={{
+                        backgroundColor: '#f5f5f5',
+                        '&:hover': { backgroundColor: '#e0e0e0' }
+                    }}
+                >
+                    <MoreVertIcon />
+                </IconButton>
+                <Menu
+                    anchorEl={settingsAnchor}
+                    open={Boolean(settingsAnchor)}
+                    onClose={handleSettingsClose}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                    <MenuItem onClick={handleOpenSettings}>
+                        <SettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Settings
+                    </MenuItem>
+                    <Divider />
+                    <MenuItem onClick={handleLogout} sx={{ color: '#e74c3c' }}>
+                        <LogoutIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Logout
+                    </MenuItem>
+                </Menu>
             </Box>
+
+            {/* Settings Dialog */}
+            <Dialog
+                open={showSettings}
+                onClose={() => setShowSettings(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <SettingsIcon />
+                        Settings
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <NotificationSettings />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShowSettings(false)}>Close</Button>
+                </DialogActions>
+            </Dialog>
 
             {/* NO-SHOW Warning Banner */}
             {passenger?.NO_show && (
@@ -253,11 +333,6 @@ function DashboardPage() {
 
             {/* Boarding Pass */}
             <BoardingPass passenger={passenger} />
-
-            {/* Notification Settings */}
-            <Box sx={{ mt: 3 }}>
-                <NotificationSettings />
-            </Box>
 
             {/* Additional Info Cards */}
             <Grid container spacing={{ xs: 1, sm: 2 }} sx={{ mt: 2 }}>
