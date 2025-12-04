@@ -55,19 +55,19 @@ function HomePage({
         <h2>🚉 Train Simulation - Journey Progress</h2>
 
         <div className="timeline-container">
-        <div className="timeline-scroll">
-          {stations.map((station, idx) => (
-            <div key={station.code} className="timeline-station">
-              {/* Connecting Line (before station, except first) */}
-              {idx > 0 && (
-                <div className={`timeline-line ${idx <= currentStationIdx ? 'completed' : 'upcoming'
-                  }`}></div>
-              )}
+          <div className="timeline-scroll">
+            {stations.map((station, idx) => (
+              <div key={station.code} className="timeline-station">
+                {/* Connecting Line (before station, except first) */}
+                {idx > 0 && (
+                  <div className={`timeline-line ${idx <= currentStationIdx ? 'completed' : 'upcoming'
+                    }`}></div>
+                )}
 
-              {/* Station Circle */}
-              <div className={`timeline-circle ${idx < currentStationIdx ? 'completed' :
-                idx === currentStationIdx ? 'current' : 'upcoming'
-                }`}>
+                {/* Station Circle */}
+                <div className={`timeline-circle ${idx < currentStationIdx ? 'completed' :
+                  idx === currentStationIdx ? 'current' : 'upcoming'
+                  }`}>
                   {idx < currentStationIdx ? '✓' : station.sno}
                 </div>
 
@@ -116,12 +116,12 @@ function HomePage({
           </button>
         </div>
 
-        {/* 2. Phase 1 */}
+        {/* 2. Phase 1 - Current Station Matching */}
         <div className="action-card-compact phase1-card" onClick={() => onNavigate('phase1')}>
           <div className="card-header">
-            <h4>Phase 1</h4>
+            <h4>🎯 Current Station Matching</h4>
           </div>
-          <p className="card-description">Initial reallocation phase</p>
+          <p className="card-description">Phase 1: HashMap-based reallocation</p>
           <div className="card-arrow">→</div>
         </div>
 

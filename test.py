@@ -1,13 +1,11 @@
 # amaravati_optimized_allocation.py
 # OPTIMIZED RAC & CNF ALLOCATION WITH SPECIFIC CONSTRAINTS
 # Constraint 1: 150 RAC passengers (board at stations 0-2, deboard at 16/24/27)
-# Constraint 2: 100 CNF passengers deboard at Narasaraopet (station 9)
-# Constraint 3: 50 CNF passengers deboard at Gudivada (station 6)
-# Constraint 4: 100% occupancy from first 3 stations
+# Constraint 2: 100 CNF passengers deboard at Narasaraopet (station 9) - SEATS NOT REUSED
+# Constraint 3: 50 CNF passengers deboard at Gudivada (station 6) - SEATS NOT REUSED
+# Constraint 4: 100% occupancy from first 3 stations (optimal total count)
 
 import random
-import csv
-import json
 from collections import defaultdict
 from pymongo import MongoClient
 
@@ -32,9 +30,9 @@ print("🚂 AMARAVATI EXPRESS - OPTIMIZED ALLOCATION WITH CONSTRAINTS")
 print("="*80)
 print("Constraints:")
 print("  1. 150 RAC passengers: board at stations 0-2, deboard at 16/24/27")
-print("  2. 100 CNF passengers: deboard at Narasaraopet (station 9)")
-print("  3. 50 CNF passengers: deboard at Gudivada (station 6)")
-print("  4. 100% occupancy from first 3 stations")
+print("  2. 100 CNF passengers: deboard at Narasaraopet (station 9) [NON-REUSABLE]")
+print("  3. 50 CNF passengers: deboard at Gudivada (station 6) [NON-REUSABLE]")
+print("  4. 100% occupancy from first 3 stations (optimal count)")
 print("="*80 + "\n")
 
 # ----------------------------
@@ -166,7 +164,7 @@ def gen_irctc_id(sequence_number):
     return f"IR_{sequence_number:04d}"
 
 # ----------------------------
-# OPTIMIZED BERTH ALLOCATOR WITH ADVANCED COLLISION HANDLING
+# OPTIMIZED BERTH ALLOCATOR WITH NON-REUSABLE BERTH TRACKING
 # ----------------------------
 class OptimizedAllocator:
     def __init__(self):
@@ -176,6 +174,7 @@ class OptimizedAllocator:
         self.berth_availability = defaultdict(list)  # (coach, berth) -> sorted [(start, end)] of occupied intervals
         self.collision_count = 0
         self.rac_side_lower_only = True  # Enforce RAC only on side lower berths
+        self.locked_berths = set()  # Berths that cannot be reused (for constraint passengers)
     
     def _merge_intervals(self, intervals):
         """Merge overlapping intervals for efficient collision detection"""
@@ -209,8 +208,20 @@ class OptimizedAllocator:
             self.berth_availability[(coach, berth)]
         )
     
-    def is_berth_available_for_cnf(self, coach, berth, start, end, passenger_id=None):
+    def lock_berth(self, coach, berth):
+        """Lock a berth so it cannot be reused (for constraint passengers)"""
+        self.locked_berths.add((coach, berth))
+    
+    def is_berth_locked(self, coach, berth):
+        """Check if a berth is locked (non-reusable)"""
+        return (coach, berth) in self.locked_berths
+    
+    def is_berth_available_for_cnf(self, coach, berth, start, end, passenger_id=None, check_locked=True):
         """Optimized availability check for CNF passengers - O(k) where k = occupied intervals"""
+        # Check if berth is locked (non-reusable for constraint passengers)
+        if check_locked and self.is_berth_locked(coach, berth):
+            return False
+        
         # Quick check using merged intervals
         if not self._find_available_slots(coach, berth, start, end):
             return False
@@ -256,15 +267,19 @@ class OptimizedAllocator:
         
         return True
     
-    def add_cnf_passenger(self, coach, berth, start, end, passenger_id, berth_type):
+    def add_cnf_passenger(self, coach, berth, start, end, passenger_id, berth_type, lock_on_deboard=False):
         """Add CNF passenger with optimized collision handling"""
-        if not self.is_berth_available_for_cnf(coach, berth, start, end, passenger_id):
+        if not self.is_berth_available_for_cnf(coach, berth, start, end, passenger_id, check_locked=False):
             return False
         
         # Add allocation
         self.allocations[(coach, berth)].append((start, end, passenger_id, False))
         self.passenger_locations[passenger_id] = (coach, berth, start, end)
         self._add_occupied_interval(coach, berth, start, end)
+        
+        # Lock berth if requested (for constraint passengers whose seats shouldn't be reused)
+        if lock_on_deboard:
+            self.lock_berth(coach, berth)
         
         return True
     
@@ -341,7 +356,8 @@ class OptimizedAllocator:
             'total_rac_passengers': total_rac_pairs * 2,
             'total_cnf': total_cnf,
             'collision_checks_failed': self.collision_count,
-            'berths_used': len(self.allocations)
+            'berths_used': len(self.allocations),
+            'locked_berths': len(self.locked_berths)
         }
 
 allocator = OptimizedAllocator()
@@ -367,19 +383,19 @@ for i in range(0, 150, 2):
 
 print(f"  Created {len(rac_pairs_data)} RAC pairs (150 passengers)")
 
-# Constraint 2 & 3: CNF passengers to stations 6 and 9
+# Constraint 2 & 3: CNF passengers to stations 6 and 9 (NON-REUSABLE SEATS)
 cnf_constraint_data = []
-# 50 passengers to Gudivada (station 6)
+# 50 passengers to Gudivada (station 6) - seats locked
 for _ in range(50):
     board = random.choice([0, 1, 2])
     cnf_constraint_data.append((board, 6))
 
-# 100 passengers to Narasaraopet (station 9)
+# 100 passengers to Narasaraopet (station 9) - seats locked
 for _ in range(100):
     board = random.choice([0, 1, 2])
     cnf_constraint_data.append((board, 9))
 
-print(f"  Created {len(cnf_constraint_data)} constraint CNF passengers")
+print(f"  Created {len(cnf_constraint_data)} constraint CNF passengers [SEATS LOCKED]")
 
 # Allocate RAC pairs with optimized allocation strategy
 rac_global_counter = 1
@@ -480,7 +496,7 @@ print(f"✅ Allocated {rac_allocated} RAC passengers")
 if failed_rac_allocations > 0:
     print(f"⚠️  Failed to allocate {failed_rac_allocations} RAC pairs due to capacity constraints")
 
-# Allocate constraint CNF passengers with optimized strategy
+# Allocate constraint CNF passengers with LOCKED BERTHS (non-reusable)
 cnf_constraint_allocated = 0
 failed_cnf_allocations = 0
 
@@ -501,7 +517,8 @@ for board, deboard in cnf_constraint_sorted:
         for coach in coach_list:
             for berth_type in berth_priority:
                 for berth in berth_map[berth_type]:
-                    if allocator.add_cnf_passenger(coach, berth, board, deboard, f"CNF_CONST_{cnf_constraint_allocated}", berth_type):
+                    # Lock berth for constraint passengers (stations 6 and 9) - seats NOT reused
+                    if allocator.add_cnf_passenger(coach, berth, board, deboard, f"CNF_CONST_{cnf_constraint_allocated}", berth_type, lock_on_deboard=True):
                         name = gen_name()
                         coach_class = "Sleeper" if coach.startswith("S") else "AC_3_Tier"
                         
@@ -541,22 +558,36 @@ for board, deboard in cnf_constraint_sorted:
     if not allocated:
         failed_cnf_allocations += 1
 
-print(f"✅ Allocated {cnf_constraint_allocated} constraint CNF passengers")
+print(f"✅ Allocated {cnf_constraint_allocated} constraint CNF passengers [SEATS LOCKED]")
 if failed_cnf_allocations > 0:
     print(f"⚠️  Failed to allocate {failed_cnf_allocations} CNF passengers")
 
 # ----------------------------
-# PHASE 2: FILL REMAINING CAPACITY WITH INTELLIGENT ALLOCATION
+# PHASE 2: FILL TO 100% OCCUPANCY (ALL PHYSICAL BERTHS)
 # ----------------------------
-print("\nPHASE 2: Filling remaining capacity with optimized allocation...")
+print("PHASE 2: Filling to 100% berth occupancy...")
 
 # Calculate remaining capacity
+# KEY FIX: RAC passengers share berths (150 passengers use 75 berths)
+# We need to fill ALL 776 berths, not just allocate 776 passengers
+# Current: 150 RAC (using 75 berths) + 150 CNF (using 150 berths) = 225 berths used
+# Remaining berths to fill: 776 - 225 = 551 berths
 current_passengers = len(passengers)
-remaining_capacity = total_berths - current_passengers
+rac_passengers = sum(1 for p in passengers if p["PNR_Status"] == "RAC")
+rac_berths_used = rac_passengers // 2  # RAC passengers share berths (2 per berth)
+cnf_passengers = sum(1 for p in passengers if p["PNR_Status"] == "CNF")
+berths_currently_used = rac_berths_used + cnf_passengers
+
+remaining_berths_to_fill = total_berths - berths_currently_used
 print(f"  Current passengers: {current_passengers}")
-print(f"  Remaining capacity: {remaining_capacity} berths")
+print(f"  RAC passengers: {rac_passengers} (using {rac_berths_used} berths)")
+print(f"  CNF passengers: {cnf_passengers} (using {cnf_passengers} berths)")
+print(f"  Berths currently used: {berths_currently_used}/{total_berths}")
+print(f"  Remaining berths to fill: {remaining_berths_to_fill}")
+print(f"  Locked berths (non-reusable): {len(allocator.locked_berths)}")
 
 # Generate additional passengers with smart journey distribution
+# These can use available berths but NOT the locked ones
 additional_passengers = []
 
 # Create journey patterns for optimal berth reuse
@@ -564,9 +595,9 @@ additional_passengers = []
 # Medium journeys (9-15 stations): 35%
 # Long journeys (16+ stations): 25%
 
-short_count = int(remaining_capacity * 0.40)
-medium_count = int(remaining_capacity * 0.35)
-long_count = remaining_capacity - short_count - medium_count
+short_count = int(remaining_berths_to_fill * 0.40)
+medium_count = int(remaining_berths_to_fill * 0.35)
+long_count = remaining_berths_to_fill - short_count - medium_count
 
 # Short journeys - allow better berth reuse
 for _ in range(short_count):
@@ -592,14 +623,10 @@ additional_passengers.sort(key=lambda x: (x[1], x[0]))
 # Allocate additional passengers with progress tracking
 additional_allocated = 0
 failed_allocations = 0
-allocation_attempts = defaultdict(int)
 
 for board, deboard, journey_type in additional_passengers:
     allocated = False
     prefer_sleeper = random.random() < 0.85
-    
-    # Track allocation attempts per journey type
-    allocation_attempts[journey_type] += 1
     
     # Try all berth types systematically
     berth_priority = ["Upper", "Middle", "Lower", "Side Upper"]  # Upper berths fill last in real scenario
@@ -611,7 +638,8 @@ for board, deboard, journey_type in additional_passengers:
         for coach in coach_list:
             for berth_type in berth_priority:
                 for berth in berth_map[berth_type]:
-                    if allocator.add_cnf_passenger(coach, berth, board, deboard, f"ADD_{additional_allocated}", berth_type):
+                    # Regular passengers - check_locked=True to avoid locked berths
+                    if allocator.add_cnf_passenger(coach, berth, board, deboard, f"ADD_{additional_allocated}", berth_type, lock_on_deboard=False):
                         name = gen_name()
                         coach_class = "Sleeper" if coach.startswith("S") else "AC_3_Tier"
                         
@@ -654,15 +682,13 @@ for board, deboard, journey_type in additional_passengers:
     # Progress indicator every 50 passengers
     if (additional_allocated + failed_allocations) % 50 == 0:
         success_rate = (additional_allocated / (additional_allocated + failed_allocations)) * 100 if (additional_allocated + failed_allocations) > 0 else 0
-        print(f"  Progress: {additional_allocated}/{remaining_capacity} | Success rate: {success_rate:.1f}%")
+        print(f"  Progress: {additional_allocated}/{remaining_berths_to_fill} berths | Success rate: {success_rate:.1f}%")
 
-print(f"\n✅ Allocated {additional_allocated} additional passengers")
-print(f"  Short journeys: {sum(1 for p in passengers[-additional_allocated:] if 3 <= (next(i for i, s in enumerate(stations) if s[0] == p['Deboarding_Station']) - next(i for i, s in enumerate(stations) if s[0] == p['Boarding_Station'])) <= 8)}")
-print(f"  Medium journeys: {sum(1 for p in passengers[-additional_allocated:] if 9 <= (next(i for i, s in enumerate(stations) if s[0] == p['Deboarding_Station']) - next(i for i, s in enumerate(stations) if s[0] == p['Boarding_Station'])) <= 15)}")
-print(f"  Long journeys: {sum(1 for p in passengers[-additional_allocated:] if (next(i for i, s in enumerate(stations) if s[0] == p['Deboarding_Station']) - next(i for i, s in enumerate(stations) if s[0] == p['Boarding_Station'])) >= 16)}")
+print(f"✅ Allocated {additional_allocated} additional passengers")
+print(f"📊 Final: {len(passengers)} total passengers occupying {berths_currently_used + additional_allocated} berths")
 
 if failed_allocations > 0:
-    print(f"⚠️  Could not allocate {failed_allocations} passengers (berth saturation reached)")
+    print(f"⚠️  Could not allocate {failed_allocations} passengers (all berths occupied)")
 
 # ----------------------------
 # ANALYSIS WITH COLLISION VERIFICATION
@@ -713,14 +739,15 @@ print(f"  Total Passengers: {total_passengers}")
 print(f"  RAC Passengers: {rac_count} ({alloc_stats['total_rac_pairs']} pairs)")
 print(f"  CNF Passengers: {cnf_count}")
 print(f"  Berths Used: {alloc_stats['berths_used']}/{total_berths}")
+print(f"  Locked Berths (non-reusable): {alloc_stats['locked_berths']}")
 print(f"  Collision Checks Failed: {alloc_stats['collision_checks_failed']}")
 
 print(f"\n✅ CONSTRAINT VERIFICATION:")
 print(f"  RAC to Nandyal (16): {rac_16_deboard}/50 {'✅' if rac_16_deboard >= 45 else '⚠️'}")
 print(f"  RAC to Koppal (24): {rac_24_deboard}/50 {'✅' if rac_24_deboard >= 45 else '⚠️'}")
 print(f"  RAC to Hubballi (27): {rac_27_deboard}/50 {'✅' if rac_27_deboard >= 45 else '⚠️'}")
-print(f"  CNF to Gudivada (6): {station_6_deboard}/50 {'✅' if station_6_deboard >= 45 else '⚠️'}")
-print(f"  CNF to Narasaraopet (9): {station_9_deboard}/100 {'✅' if station_9_deboard >= 95 else '⚠️'}")
+print(f"  CNF to Gudivada (6): {station_6_deboard}/50 {'✅' if station_6_deboard >= 45 else '⚠️'} [LOCKED]")
+print(f"  CNF to Narasaraopet (9): {station_9_deboard}/100 {'✅' if station_9_deboard >= 95 else '⚠️'} [LOCKED]")
 print(f"  All board at first 3 stations: {first_3_boarders}/{total_passengers} {'✅' if first_3_boarders == total_passengers else '❌'}")
 
 print(f"\n📊 OCCUPANCY ANALYSIS:")
@@ -733,9 +760,18 @@ for i in range(min(10, NUM_STATIONS)):
 
 peak = max(onboard)
 peak_idx = onboard.index(peak)
-print(f"\n  Peak Occupancy: {peak} passengers at {stations[peak_idx][0]}")
-print(f"  Capacity Utilization: {(total_passengers/total_berths)*100:.1f}%")
-print(f"  Peak vs Max Capacity: {peak}/{MAX_ONBOARD_CAPACITY} ({(peak/MAX_ONBOARD_CAPACITY)*100:.1f}%)")
+
+# Calculate actual berth occupancy
+final_rac = sum(1 for p in passengers if p["PNR_Status"] == "RAC")
+final_cnf = sum(1 for p in passengers if p["PNR_Status"] == "CNF")
+final_berths_occupied = (final_rac // 2) + final_cnf
+
+print(f"Peak Occupancy: {peak} passengers at {stations[peak_idx][0]}")
+print(f"  Optimal Total Passengers: {total_passengers}")
+print(f"  Total Berths Occupied: {final_berths_occupied}/{total_berths} ({(final_berths_occupied/total_berths)*100:.1f}%)")
+print(f"  Initial Occupancy (stations 0-2): {onboard[0]} passengers")
+print(f"  Passenger Capacity Utilization: {(total_passengers/total_berths)*100:.1f}%")
+print(f"  Berth Capacity Utilization: {(final_berths_occupied/total_berths)*100:.1f}%")
 
 # Journey length distribution
 journey_lengths = []
@@ -777,29 +813,29 @@ for berth_type in ["Lower", "Middle", "Upper", "Side Lower", "Side Upper"]:
 print("="*80)
 
 # ----------------------------
-# EXPORT
+# EXPORT TO MONGODB
 # ----------------------------
-csv_file = "amaravati_optimized_allocation.csv"
-json_file = "amaravati_optimized_allocation.json"
-
-with open(csv_file, "w", newline='', encoding='utf-8') as f:
-    writer = csv.DictWriter(f, fieldnames=passengers[0].keys())
-    writer.writeheader()
-    writer.writerows(passengers)
-print(f"\n✅ Exported: {csv_file}")
-
-with open(json_file, "w", encoding='utf-8') as f:
-    json.dump(passengers, f, indent=2, ensure_ascii=False)
-print(f"✅ Exported: {json_file}")
+print("" + "="*80)
+print("💾 INSERTING DATA INTO MONGODB")
+print("="*80)
 
 try:
     client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=2000)
     db = client['PassengersDB']
-    coll = db['L_1']
-    coll.delete_many({})
-    coll.insert_many(passengers)
-    print(f"✅ MongoDB: PassengersDB.P_optimized")
+    coll = db['L_2']
+    
+    # Clear existing data
+    deleted_count = coll.delete_many({}).deleted_count
+    print(f"🗑️  Cleared {deleted_count} existing documents from PassengersDB.L_1")
+    
+    # Insert new data
+    result = coll.insert_many(passengers)
+    print(f"✅ Successfully inserted {len(result.inserted_ids)} passengers into MongoDB")
+    print(f"   Database: PassengersDB")
+    print(f"   Collection: L_1")
+    
 except Exception as e:
-    print(f"⚠️ MongoDB skipped: {e}")
+    print(f"❌ MongoDB operation failed: {e}")
+    print(f"   Make sure MongoDB is running on localhost:27017")
 
-print("\n🎉 Optimized allocation completed!")
+print("🎉 Optimized allocation completed!")

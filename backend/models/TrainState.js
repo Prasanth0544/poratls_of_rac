@@ -181,6 +181,30 @@ class TrainState {
   }
 
   /**
+   * Find passenger by PNR and return JUST the passenger object
+   * Searches both berths AND racQueue
+   */
+  findPassengerByPNR(pnr) {
+    // First check in berths
+    for (let coach of this.coaches) {
+      for (let berth of coach.berths) {
+        const passenger = berth.passengers.find(p => p.pnr === pnr);
+        if (passenger) {
+          return passenger;
+        }
+      }
+    }
+
+    // Also check in RAC queue
+    const racPassenger = this.racQueue.find(r => r.pnr === pnr);
+    if (racPassenger) {
+      return racPassenger;
+    }
+
+    return null;
+  }
+
+  /**
    * Update statistics
    */
   updateStats() {
@@ -413,6 +437,18 @@ class TrainState {
     });
 
     return passengers;
+  }
+
+  /**
+   * Get boarded RAC passengers
+   * Returns RAC passengers who are currently boarded and not marked as no-show
+   */
+  getBoardedRACPassengers() {
+    return this.racQueue.filter(rac =>
+      rac.boarded === true &&
+      rac.noShow !== true &&
+      rac.pnrStatus === 'RAC'
+    );
   }
 
   /**
@@ -976,14 +1012,16 @@ class TrainState {
       });
     }
 
-    // Update database
+    // Update database with correct field names
     await db.getPassengersCollection().updateOne(
       { PNR_Number: action.target.pnr },
       {
         $set: {
-          pnrStatus: 'RAC',
-          Coach: action.previousState.coach || null,
-          Seat_Number: action.previousState.seat || null
+          PNR_Status: 'RAC',              // CNF → RAC
+          Rac_status: action.previousState.racStatus || action.target.racNumber, // Restore RAC number
+          Assigned_Coach: action.previousState.coach || null,  // Use correct field name
+          Assigned_berth: action.previousState.seat || null,   // Use correct field name
+          Berth_Type: 'Side Lower',       // RAC always Side Lower
         }
       }
     );

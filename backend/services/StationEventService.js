@@ -37,10 +37,18 @@ class StationEventService {
     const deboardResult = this.deboardPassengers(trainState);
     result.deboarded = deboardResult.count;
 
-    // **STEP 3: Process RAC upgrades ONLY for newly vacant berths (PERFORMANCE OPTIMIZATION)**
-    const upgradeResult = await this.processRACUpgradesWithEligibility(trainState, deboardResult.newlyVacantBerths);
-    result.racAllocated = upgradeResult.count;
-    result.upgrades = upgradeResult.upgrades;
+    // **STEP 3: RAC UPGRADES - DISABLED (Using Manual TTE Approval via Current Station Matching)**
+    // OLD AUTOMATIC LOGIC DISABLED - Now using Current Station Matching workflow
+    // const upgradeResult = await this.processRACUpgradesWithEligibility(trainState, deboardResult.newlyVacantBerths);
+    // result.racAllocated = upgradeResult.count;
+    // result.upgrades = upgradeResult.upgrades;
+
+    console.log(`\n⚠️  Automatic RAC upgrades DISABLED`);
+    console.log(`   → Use "Current Station Matching" tab in Admin Portal`);
+    console.log(`   → Manual TTE approval required\n`);
+
+    result.racAllocated = 0;
+    result.upgrades = [];
 
     // **STEP 4: Process no-shows**
     result.noShows = this.processNoShows(trainState);
@@ -130,17 +138,13 @@ class StationEventService {
 
   /**
    * Process RAC upgrades with strict eligibility checking
-   * PERFORMANCE OPTIMIZED: Only processes newly vacant berths (from deboarding)
-   * instead of scanning all 688 vacant berths
+   * UPDATED: Now supports two modes - AUTO (immediate allocation) and APPROVAL (TTE approval required)
    */
   async processRACUpgradesWithEligibility(trainState, newlyVacantBerths = []) {
-    const ReallocationService = require('./ReallocationService');
+    const CONSTANTS = require('./reallocation/reallocationConstants');
     const currentIdx = trainState.currentStationIdx;
 
-    let upgradeCount = 0;
-    const upgrades = [];
-
-    console.log(`\n🎯 Processing RAC upgrades...`);
+    console.log(`\n🎯 Processing RAC upgrades (Mode: ${CONSTANTS.CURRENT_MODE})...`);
     console.log(`   Newly vacant berths: ${newlyVacantBerths.length}`);
 
     // OPTIMIZATION: Only check newly vacant berths, not all 688 vacant berths!
@@ -148,6 +152,24 @@ class StationEventService {
       console.log(`   No new vacancies - skipping RAC upgrade processing`);
       return { count: 0, upgrades: [] };
     }
+
+    // ===== MODE CHECK: AUTO vs APPROVAL =====
+    if (CONSTANTS.CURRENT_MODE === CONSTANTS.REALLOCATION_MODE.APPROVAL) {
+      // NEW PATH: Create pending reallocations for TTE approval
+      console.log(`   📋 Mode: APPROVAL - Creating pending reallocations for TTE`);
+      const StationWiseApprovalService = require('./StationWiseApprovalService');
+      return await StationWiseApprovalService.createPendingReallocations(
+        trainState,
+        newlyVacantBerths
+      );
+    }
+
+    // ===== EXISTING PATH: AUTO MODE (Immediate Allocation) =====
+    console.log(`   ⚡ Mode: AUTO - Allocating immediately`);
+
+    const ReallocationService = require('./ReallocationService');
+    let upgradeCount = 0;
+    const upgrades = [];
 
     // Get vacant segment ranges ONLY for newly vacant berths
     const vacantSegments = [];

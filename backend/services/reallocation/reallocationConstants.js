@@ -5,17 +5,28 @@
  */
 
 module.exports = {
+  // ============= REALLOCATION MODE CONFIGURATION =============
+
+  // Reallocation mode: AUTO or APPROVAL
+  REALLOCATION_MODE: {
+    AUTO: 'AUTO',         // Automatically allocate RAC passengers (current behavior)
+    APPROVAL: 'APPROVAL'  // Require TTE approval before allocation (new feature)
+  },
+
+  // Current active mode (toggle here to switch modes)
+  CURRENT_MODE: 'APPROVAL', // Change to 'AUTO' to restore automatic allocation
+
   // ============= ELIGIBILITY RULES CONFIGURATION =============
-  
+
   // Rule 11: Minimum journey distance for RAC upgrade eligibility
   MIN_JOURNEY_DISTANCE: 70, // km - only passengers traveling 70km+ are eligible
-  
+
   // ============= UPGRADE OFFER CONFIGURATION =============
-  
+
   // Offer expiry time
   OFFER_EXPIRY_TTL: 3600000, // 1 hour in milliseconds
   OFFER_EXPIRY_SECONDS: 3600, // Alternative: in seconds
-  
+
   // Offer status constants
   OFFER_STATUS: {
     PENDING: 'PENDING',
@@ -26,7 +37,7 @@ module.exports = {
   },
 
   // ============= PASSENGER STATUS CONSTANTS =============
-  
+
   PNR_STATUS: {
     RAC: 'RAC',
     CNF: 'CNF',
@@ -41,7 +52,7 @@ module.exports = {
   },
 
   // ============= BERTH CONFIGURATION =============
-  
+
   BERTH_TYPES: {
     LOWER: 'Lower',
     MIDDLE: 'Middle',
@@ -60,17 +71,17 @@ module.exports = {
   },
 
   // ============= DATABASE CONFIGURATION =============
-  
+
   // Batch processing
   BATCH_SIZE: 10, // Process passenger offers in batches
   BATCH_TIMEOUT_MS: 5000, // 5 seconds between batches
-  
+
   // Retry configuration
   MAX_RETRIES: 3,
   RETRY_DELAY_MS: 1000,
 
   // ============= ERROR MESSAGES =============
-  
+
   ERROR_MESSAGES: {
     PASSENGER_NOT_FOUND: 'Passenger not found in queue',
     BERTH_NOT_FOUND: 'Berth not found',
@@ -90,7 +101,7 @@ module.exports = {
   },
 
   // ============= SUCCESS MESSAGES =============
-  
+
   SUCCESS_MESSAGES: {
     NO_SHOW_MARKED: 'Passenger marked as no-show',
     OFFER_CREATED: 'Upgrade offer created',
@@ -100,7 +111,7 @@ module.exports = {
   },
 
   // ============= WEBSOCKET EVENTS =============
-  
+
   WEBSOCKET_EVENTS: {
     NO_SHOW: 'NO_SHOW',
     VACANCY_DETECTED: 'VACANCY_DETECTED',
@@ -112,7 +123,7 @@ module.exports = {
   },
 
   // ============= ELIGIBILITY RULE IDs =============
-  
+
   ELIGIBILITY_RULES: {
     RULE_0: 'Must have RAC status',
     RULE_1: 'Passenger must be online',
@@ -129,7 +140,7 @@ module.exports = {
   },
 
   // ============= NOTIFICATION CONFIGURATION =============
-  
+
   NOTIFICATION: {
     CHANNELS: ['EMAIL', 'SMS', 'WEBSOCKET', 'IN_APP'],
     UPGRADE_TEMPLATE: 'UPGRADE_OFFER',
@@ -138,7 +149,7 @@ module.exports = {
   },
 
   // ============= LOGGING CONFIGURATION =============
-  
+
   LOG_LEVELS: {
     DEBUG: 'DEBUG',
     INFO: 'INFO',
@@ -147,7 +158,7 @@ module.exports = {
   },
 
   // ============= TIME CONFIGURATION =============
-  
+
   TIME: {
     ONE_HOUR_MS: 3600000,
     ONE_MINUTE_MS: 60000,

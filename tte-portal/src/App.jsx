@@ -13,6 +13,7 @@ import OfflineUpgradesPage from './pages/OfflineUpgradesPage'; // ✅ NEW
 import PassengersPage from './pages/PassengersPage'; // ✅ UNIFIED - Same as admin portal
 import BoardedPassengersPage from './pages/BoardedPassengersPage'; // ✅ NEW
 import UpgradeNotificationsPage from './pages/UpgradeNotificationsPage'; // ✅ Sent offers tracking
+import PendingReallocationsPage from './pages/PendingReallocationsPage'; // ✅ NEW - Station-wise approval
 import './App.css';
 import './UserMenu.css'; // ✅ 3-dot menu styling
 
@@ -160,6 +161,7 @@ function App() {
                         <Tab label="RAC Upgrades" />
                         <Tab label="Action History" />
                         <Tab label="Sent Offers" />
+                        <Tab label="Pending Reallocations" /> {/* ✅ NEW */}
                     </Tabs>
                 </AppBar>
 
@@ -171,6 +173,7 @@ function App() {
                     {currentTab === 3 && <OfflineUpgradesPage />}
                     {currentTab === 4 && <ActionHistoryPage />}
                     {currentTab === 5 && <UpgradeNotificationsPage />}
+                    {currentTab === 6 && <PendingReallocationsPage />} {/* ✅ NEW */}
                 </Box>
 
                 <Box component="footer" sx={{ bgcolor: 'background.paper', py: 2, borderTop: '1px solid #e0e0e0' }}>

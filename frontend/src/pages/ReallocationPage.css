@@ -1,4 +1,423 @@
-/* frontend/src/pages/ReallocationPage.css - Professional & Classic Design */
+/* frontend/src/pages/* ReallocationPage.css */
+
+/* ========== HASHMAP VISUALIZATION SECTION ========== */
+.hashmap-section {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    padding: 30px;
+    border-radius: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.hashmap-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.hashmap-section h3 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+}
+
+.hashmap-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.hashmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.hashmap-card {
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+}
+
+.hashmap-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: #667eea;
+}
+
+.hashmap-key {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 120px;
+}
+
+.key-label {
+    font-size: 11px;
+    color: #718096;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.key-value {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: #2d3748;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hashmap-arrow {
+    font-size: 24px;
+    color: #667eea;
+    font-weight: 700;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+}
+
+.hashmap-value {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.value-destination {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.dest-label {
+    font-size: 11px;
+    color: #718096;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dest-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.value-details {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.detail-item {
+    font-size: 13px;
+    color: #4a5568;
+    padding: 4px 10px;
+    background: #edf2f7;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.detail-item.rac-number {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+    color: #2d3748;
+    font-weight: 700;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .hashmap-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hashmap-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hashmap-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+/* ========== CURRENT STATION MATCHING VIEW ========== */
+.matching-view-content {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.matching-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    border-radius: 15px;
+    color: white;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.matching-header h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.matching-header .header-description {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.matching-header .header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.dual-hashmap-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.hashmap-column {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.column-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.count-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.hashmap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hashmap-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.hashmap-item:hover {
+    background: #f0f0f0;
+    border-color: #667eea;
+    transform: translateX(5px);
+}
+
+.hashmap-item .item-key {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 100px;
+}
+
+.hashmap-item .key-label {
+    font-size: 10px;
+    color: #718096;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.hashmap-item .key-value {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.hashmap-item .item-arrow {
+    font-size: 20px;
+    color: #667eea;
+    font-weight: 700;
+}
+
+.hashmap-item .item-value {
+    flex: 1;
+}
+
+.hashmap-item .value-main {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2d3748;
+    margin-bottom: 5px;
+}
+
+.hashmap-item .value-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.hashmap-item .value-meta span {
+    background: white;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.hashmap-item .rac-badge {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+    color: #2d3748;
+    font-weight: 700;
+    border: none;
+}
+
+.hashmap-item .class-badge {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    font-weight: 700;
+    border: none;
+}
+
+.empty-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Matches Section */
+.matches-section {
+    background: white;
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.matches-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.matches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+}
+
+.match-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    border-radius: 10px;
+    border: 2px solid #28a745;
+}
+
+.match-berth {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.match-berth strong {
+    font-size: 16px;
+    color: #155724;
+}
+
+.match-berth .berth-type {
+    font-size: 11px;
+    color: #155724;
+    opacity: 0.8;
+}
+
+.match-arrow {
+    font-size: 24px;
+    color: #28a745;
+}
+
+.match-passengers {
+    flex: 1;
+}
+
+.top-match {
+    font-size: 14px;
+    color: #155724;
+    margin-bottom: 5px;
+}
+
+.other-matches {
+    font-size: 12px;
+    color: #155724;
+    opacity: 0.7;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .dual-hashmap-container {
+        grid-template-columns: 1fr;
+    }
+}
+
 
 /* NOTE: This is a clean copy with tab navigation and no-show table styles added at the end */
 
@@ -119,26 +538,24 @@
     border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-/* Tab Navigation - Classic Style */
-.tab-navigation {
+/* ========== TABS - MATERIAL UI STYLE (Like TTE Portal) ========== */
+.tabs-container {
     display: flex;
-    gap: 8px;
-    margin-bottom: 24px;
     border-bottom: 2px solid #e2e8f0;
-    background: white;
-    padding: 0 24px;
-    border-radius: 8px 8px 0 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+    padding: 0;
+    margin: 0;
+    gap: 0;
 }
 
-.tab-button {
-    padding: 14px 24px;
+.tab {
+    padding: 16px 28px;
     background: transparent;
     border: none;
     border-bottom: 3px solid transparent;
-    color: #64748b;
+    color: rgba(255, 255, 255, 0.7);
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
@@ -146,35 +563,20 @@
     align-items: center;
     gap: 8px;
     letter-spacing: 0.3px;
+    text-transform: none;
+    min-height: 48px;
 }
 
-.tab-button:hover {
-    color: #334155;
-    background: #f8fafc;
+.tab:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
 }
 
-.tab-button.active {
-    color: #667eea;
-    border-bottom-color: #667eea;
-    background: #faf5ff;
-}
-
-.tab-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 8px;
-    background: #667eea;
-    color: white;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.tab-count.warning {
-    background: #f59e0b;
+.tab.active {
+    color: #ffffff;
+    border-bottom-color: #ffffff;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* Matrix Section */

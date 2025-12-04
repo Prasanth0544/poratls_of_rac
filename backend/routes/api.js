@@ -9,6 +9,7 @@ const visualizationController = require('../controllers/visualizationController'
 const configController = require('../controllers/configController');
 const authController = require('../controllers/authController'); // ✅ NEW
 const tteController = require('../controllers/tteController'); // ✅ NEW - TTE operations
+const stationWiseApprovalController = require('../controllers/StationWiseApprovalController'); // ✅ NEW - Station-wise approval
 const validationMiddleware = require('../middleware/validation');
 const { authMiddleware, requireRole, requirePermission } = require('../middleware/auth'); // ✅ NEW
 
@@ -195,6 +196,95 @@ router.post('/reallocation/apply',
   validationMiddleware.validateReallocation,
   validationMiddleware.checkTrainInitialized,
   (req, res) => reallocationController.applyReallocation(req, res)
+);
+
+// ========== STATION-WISE APPROVAL ROUTES ========== ✅ NEW
+// Get pending reallocations awaiting TTE approval
+router.get('/reallocation/pending',
+  authMiddleware,
+  requireRole(['TTE', 'ADMIN']),
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  (req, res) => stationWiseApprovalController.getPendingReallocations(req, res)
+);
+
+// Approve batch of reallocations
+router.post('/reallocation/approve-batch',
+  authMiddleware,
+  requireRole(['TTE', 'ADMIN']),
+  validationMiddleware.sanitizeBody,
+  validationMiddleware.checkTrainInitialized,
+  (req, res) => stationWiseApprovalController.approveBatch(req, res)
+);
+
+// Reject a specific reallocation
+router.post('/reallocation/reject/:id',
+  authMiddleware,
+  requireRole(['TTE', 'ADMIN']),
+  validationMiddleware.sanitizeBody,
+  validationMiddleware.checkTrainInitialized,
+  (req, res) => stationWiseApprovalController.rejectReallocation(req, res)
+);
+
+// Get station-wise data (for Admin portal)
+router.get('/reallocation/station-wise',
+  authMiddleware,
+  requireRole(['TTE', 'ADMIN']),
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  (req, res) => stationWiseApprovalController.getStationWiseData(req, res)
+);
+
+// ✅ NEW - Get current station HashMap matching data
+router.get('/reallocation/current-station-matching',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const CurrentStationService = require('../services/CurrentStationReallocationService');
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      const data = CurrentStationService.getCurrentStationData(trainState);
+
+      res.json({
+        success: true,
+        data: data
+      });
+    } catch (error) {
+      console.error('Error getting current station matching data:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ✅ NEW - Create pending reallocations from current station matches
+router.post('/reallocation/create-from-matches',
+  validationMiddleware.checkTrainInitialized,
+  validationMiddleware.checkJourneyStarted,
+  async (req, res) => {
+    try {
+      const CurrentStationService = require('../services/CurrentStationReallocationService');
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ error: 'Train not initialized' });
+      }
+
+      const result = await CurrentStationService.createPendingReallocationsFromMatches(trainState);
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Error creating pending reallocations:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 );
 
 // ========== PASSENGER ROUTES ==========
@@ -386,5 +476,44 @@ router.post('/tte/mark-no-show',
   validationMiddleware.checkJourneyStarted,
   (req, res) => tteController.markNoShow(req, res)
 );
+
+// ========== TEMPORARY FIX: Mark RAC as Boarded ==========
+router.post('/admin/fix-rac-boarding',
+  (req, res) => {
+    try {
+      const trainState = trainController.getGlobalTrainState();
+
+      if (!trainState) {
+        return res.status(400).json({ success: false, message: 'Train not initialized' });
+      }
+
+      const currentIdx = trainState.currentStationIdx;
+      let fixed = 0;
+
+      // Mark all RAC passengers as boarded if they should be by now
+      trainState.racQueue.forEach(rac => {
+        if (rac.fromIdx <= currentIdx && !rac.boarded && !rac.noShow) {
+          rac.boarded = true;
+          fixed++;
+        }
+      });
+
+      res.json({
+        success: true,
+        message: `Fixed ${fixed} RAC passengers marked as boarded`,
+        data: {
+          currentStation: trainState.stations[currentIdx]?.name,
+          currentStationIdx: currentIdx,
+          racQueueTotal: trainState.racQueue.length,
+          nowBoarded: trainState.racQueue.filter(r => r.boarded).length,
+          fixed: fixed
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 
 module.exports = router;

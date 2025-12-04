@@ -1,0 +1,297 @@
+/*  PendingReallocationsPage.css */
+
+.pending-reallocations-page {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.page-header h1 {
+    font-size: 28px;
+    color: #1e293b;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.pending-count {
+    background: #3b82f6;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.btn-refresh {
+    padding: 10px 20px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-refresh:hover {
+    background: #e2e8f0;
+    transform: translateY(-2px);
+}
+
+/* Bulk Actions Bar */
+.bulk-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.select-all {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.select-all input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.select-all label {
+    font-weight: 600;
+    color: #475569;
+}
+
+.btn-approve {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-approve:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.btn-approve:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Reallocations Grid */
+.reallocations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.reallocation-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s;
+    position: relative;
+}
+
+.reallocation-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.card-checkbox {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+
+.card-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-right: 40px;
+}
+
+.card-header h3 {
+    font-size: 18px;
+    color: #1e293b;
+    margin: 0;
+}
+
+.station-badge {
+    background: #f1f5f9;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-row.highlight {
+    background: #fef3c7;
+    padding: 10px;
+    border-radius: 8px;
+    border-bottom: none;
+}
+
+.detail-row .label {
+    font-weight: 600;
+    color: #64748b;
+}
+
+.detail-row .value {
+    color: #1e293b;
+}
+
+.detail-row .value.proposed {
+    color: #f59e0b;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.detail-row .value.current {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+/* Card Actions */
+.card-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-approve-single,
+.btn-reject {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-approve-single {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.btn-approve-single:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.btn-reject {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-reject:hover:not(:disabled) {
+    background: #fecaca;
+    transform: translateY(-2px);
+}
+
+/* Rejection Form */
+.rejection-form {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.rejection-form input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.btn-confirm-reject,
+.btn-cancel {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-confirm-reject {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-cancel {
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    color: #1e293b;
+    margin-bottom: 10px;
+}
+
+.empty-state p {
+    color: #64748b;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 60px 20px;
+    font-size: 24px;
+    color: #64748b;
+}

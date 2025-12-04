@@ -70,8 +70,8 @@ class AllocationService {
     // Allocate berth
     this._allocateBerth(passenger, berthObj, trainState);
 
-    // Update database
-    await this._updateDatabase(pnr, coach, berth);
+    // Update database with berth type
+    await this._updateDatabase(pnr, coach, berth, berthObj.type);
 
     // Update statistics
     this._updateStats(trainState, passenger);
@@ -109,9 +109,11 @@ class AllocationService {
    */
   _allocateBerth(passenger, berth, trainState) {
     // Update passenger allocation
-    passenger.coach = berth.coach;
+    passenger.coach = berth.coachNo;
     passenger.seat = berth.berthNo;
     passenger.pnrStatus = 'CNF';
+    passenger.racStatus = '-';           // Update RAC status
+    passenger.berthType = berth.type;    // Update berth type
     passenger.boarded = true;
 
     // Update berth occupancy
@@ -126,22 +128,26 @@ class AllocationService {
    * Update database
    * @private
    */
-  async _updateDatabase(pnr, coach, berth) {
+  async _updateDatabase(pnr, coach, berth, berthType) {
     try {
       const passengersCollection = db.getPassengersCollection();
       await passengersCollection.updateOne(
         { PNR_Number: pnr },
         {
           $set: {
-            PNR_Status: 'CNF',
-            Coach_Number: coach,
-            Seat_Number: berth,
+            PNR_Status: 'CNF',           // RAC → CNF
+            Rac_status: '-',             // "1" → "-"
+            Assigned_Coach: coach,       // Use correct field name
+            Assigned_berth: berth,       // Use correct field name
+            Berth_Type: berthType,       // Update from "Side Lower" to actual type
+            Passenger_Status: 'Offline', // Maintain status
             Boarded: true,
             Upgraded_From: 'RAC',
           },
         }
       );
-      console.log(`✅ Updated allocation in MongoDB for PNR: ${pnr}`);
+      console.log(`✅ Updated RAC upgrade in MongoDB for PNR: ${pnr}`);
+      console.log(`   PNR_Status: RAC → CNF | Rac_status: → "-" | Berth: ${coach}-${berth} (${berthType})`);
     } catch (error) {
       console.error('Error updating database:', error.message);
       throw error;
@@ -177,7 +183,7 @@ class AllocationService {
       }
 
       // Allocate both passengers to same berth
-      const berth = trainState.findBerth(newBerthDetails.coach, newBerthDetails.berth);
+      const berth = trainState.findBerth(newBerthDetails.coachNo, newBerthDetails.berthNo);
       if (!berth) {
         throw new Error('Berth not found');
       }
@@ -190,17 +196,17 @@ class AllocationService {
         this._allocateBerth(coPassenger, berth, trainState);
       }
 
-      // Update database
-      await this._updateDatabase(racPNR, newBerthDetails.coach, newBerthDetails.berth);
+      // Update database with berth type
+      await this._updateDatabase(racPNR, newBerthDetails.coachNo, newBerthDetails.berthNo, berth.type);
       if (coPassenger.pnrStatus === 'RAC') {
-        await this._updateDatabase(coPassenger.pnr, newBerthDetails.coach, newBerthDetails.berth);
+        await this._updateDatabase(coPassenger.pnr, newBerthDetails.coachNo, newBerthDetails.berthNo, berth.type);
       }
 
       return {
         success: true,
         racPNR,
         coPassengerPNR: coPassenger.pnr,
-        berth: `${newBerthDetails.coach}-${newBerthDetails.berth}`,
+        berth: `${newBerthDetails.coachNo}-${newBerthDetails.berthNo}`,
       };
     } catch (error) {
       console.error('Error upgrading with co-passenger:', error.message);
