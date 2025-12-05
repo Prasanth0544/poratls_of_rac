@@ -19,10 +19,11 @@ class CurrentStationReallocationService {
         const currentStation = trainState.stations[currentIdx];
 
         // Check if already calculated this station (return cached)
-        if (trainState.isStationLockedForUpgrades()) {
-            console.log(`🔒 Station ${currentIdx} already locked, returning cached results`);
-            return trainState.stationUpgradeLock.cachedResults;
-        }
+        // ❌ DISABLED: Station lock prevents refreshing after TTE approval
+        // if (trainState.isStationLockedForUpgrades()) {
+        //     console.log(`🔒 Station ${currentIdx} already locked, returning cached results`);
+        //     return trainState.stationUpgradeLock.cachedResults;
+        // }
 
         console.log(`\n🎯 Getting CURRENT STATION reallocation data: ${currentStation.name} (idx: ${currentIdx})`);
 
@@ -65,13 +66,14 @@ class CurrentStationReallocationService {
                 matchesCount: matches.length,
                 upgradesAvailable: Math.min(matches.length, racHashMap.size)
             },
-            // Station lock info
-            stationLocked: true,
+            // ❌ LOCK COMPLETELY REMOVED
+            // Removed: stationLocked: true
             calculatedAt: new Date().toISOString()
         };
 
+        // ❌ DISABLED: Lock prevents fresh calculations after upgrades
         // Lock station and cache results
-        trainState.lockStationForUpgrades(currentIdx, results);
+        // trainState.lockStationForUpgrades(currentIdx, results);
 
         return results;
     }

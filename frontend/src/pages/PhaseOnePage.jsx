@@ -17,12 +17,42 @@ const PhaseOnePage = ({ onClose }) => {
     fetchMatchingData();
     fetchUpgradedPassengers();
 
-    // Auto-refresh every 10 seconds
+    // Auto-refresh every 3 seconds (faster updates after TTE approval)
     const interval = setInterval(() => {
       fetchMatchingData();
       fetchUpgradedPassengers();
-    }, 10000);
-    return () => clearInterval(interval);
+    }, 3000);
+
+    // ✅ WebSocket listener for instant refresh
+    const ws = new WebSocket('ws://localhost:5000');
+
+    ws.onopen = () => {
+      console.log('PhaseOnePage WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Refresh data when TTE approves reallocations
+        if (message.type === 'RAC_REALLOCATION_APPROVED') {
+          console.log('✅ RAC approval detected, refreshing data...', message.data);
+          fetchMatchingData();
+          fetchUpgradedPassengers();
+        }
+      } catch (error) {
+        console.error('WebSocket message parse error:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      clearInterval(interval);
+      ws.close();
+    };
   }, []);
 
   const fetchMatchingData = async () => {
@@ -269,6 +299,7 @@ const PhaseOnePage = ({ onClose }) => {
                     <th>RAC Status</th>
                     <th>Passenger Name</th>
                     <th>PNR</th>
+                    <th>Current Berth</th>
                     <th>→</th>
                     <th>Upgrade Berth</th>
                     <th>Berth Type</th>
@@ -284,6 +315,7 @@ const PhaseOnePage = ({ onClose }) => {
                       </td>
                       <td className="td-name">{match.topMatch?.name}</td>
                       <td className="td-pnr">{match.topMatch?.pnr}</td>
+                      <td className="td-current-berth">{match.topMatch?.currentBerth || '-'}</td>
                       <td className="td-arrow">→</td>
                       <td className="td-berth-upgrade">{match.berthId}</td>
                       <td className="td-type">{match.berth?.type}</td>

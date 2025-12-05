@@ -75,6 +75,19 @@ class StationWiseApprovalController {
             // Update train stats after approvals
             trainState.updateStats();
 
+            // ✅ BROADCAST TO ALL CLIENTS
+            const wsManager = require('../config/websocket');
+            console.log(`🔔 Broadcasting RAC_REALLOCATION_APPROVED to all clients...`);
+            wsManager.broadcast({
+                type: 'RAC_REALLOCATION_APPROVED',
+                data: {
+                    totalApproved: result.totalApproved,
+                    totalProcessed: result.totalProcessed,
+                    approvedBy: tteId || 'TTE',
+                    timestamp: new Date().toISOString()
+                }
+            });
+
             res.json({
                 success: true,
                 message: `Approved ${result.totalApproved} of ${result.totalProcessed} reallocations`,

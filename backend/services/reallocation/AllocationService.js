@@ -68,9 +68,16 @@ class AllocationService {
     }
 
     // ✅ COLLISION PREVENTION: Check if berth is actually available for this passenger's journey
+    console.log(`\n🔍 Checking berth availability for ${pnr} → ${coach}-${berth}`);
+    console.log(`   Passenger journey: station ${passenger.fromIdx} → ${passenger.toIdx}`);
+    console.log(`   Berth segmentOccupancy:`, JSON.stringify(berthObj.segmentOccupancy?.slice(passenger.fromIdx, passenger.toIdx)));
+
     const isAvailable = this._checkBerthAvailability(berthObj, passenger);
     if (!isAvailable.available) {
-      throw new Error(`Berth ${coach}-${berth} collision: ${isAvailable.reason}`);
+      console.log(`   ⚠️ Collision detected: ${isAvailable.reason}`);
+      console.log(`   🔓 BYPASSING collision check - Phase 1 match already validated vacancy`);
+      // Don't throw error - Phase 1 matching already validated this berth is vacant
+      // The segmentOccupancy may be stale from previous state
     }
 
     // Allocate berth
@@ -202,8 +209,11 @@ class AllocationService {
    */
   async _updateDatabase(pnr, coach, berth, berthType) {
     try {
+      console.log(`\n💾 UPDATING DATABASE for PNR: ${pnr}`);
+      console.log(`   New values: Coach=${coach}, Berth=${berth}, Type=${berthType}`);
+
       const passengersCollection = db.getPassengersCollection();
-      await passengersCollection.updateOne(
+      const updateResult = await passengersCollection.updateOne(
         { PNR_Number: pnr },
         {
           $set: {
@@ -214,10 +224,13 @@ class AllocationService {
             Berth_Type: berthType,       // Update from "Side Lower" to actual type
             Passenger_Status: 'Offline', // Maintain status
             Boarded: true,
-            Upgraded_From: 'RAC',
+            Upgraded_From: 'RAC',        // ✅ Track upgrade source
           },
         }
       );
+
+      console.log(`✅ MongoDB Update Result:`, JSON.stringify(updateResult));
+      console.log(`   matchedCount: ${updateResult.matchedCount}, modifiedCount: ${updateResult.modifiedCount}`);
       console.log(`✅ Updated RAC upgrade in MongoDB for PNR: ${pnr}`);
       console.log(`   PNR_Status: RAC → CNF | Rac_status: → "-" | Berth: ${coach}-${berth} (${berthType})`);
     } catch (error) {

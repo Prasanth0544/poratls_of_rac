@@ -85,6 +85,36 @@ function PassengersPage({ trainData, onClose, onNavigate }) {
 
   useEffect(() => {
     loadData();
+
+    // ✅ WebSocket listener for instant refresh
+    const ws = new WebSocket('ws://localhost:5000');
+
+    ws.onopen = () => {
+      console.log('PassengersPage WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Refresh on any passenger-related events
+        if (message.type === 'RAC_REALLOCATION_APPROVED' ||
+          message.type === 'TRAIN_UPDATE' ||
+          message.type === 'NO_SHOW' ||
+          message.type === 'RAC_REALLOCATION') {
+          console.log('✅ Passenger update detected, refreshing data...', message.type);
+          loadData();
+        }
+      } catch (error) {
+        console.error('WebSocket message parse error:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => ws.close();
   }, []);
 
   useEffect(() => {

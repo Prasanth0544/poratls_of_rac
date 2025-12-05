@@ -11,6 +11,33 @@ function RACQueuePage({ trainData, onClose }) {
 
   useEffect(() => {
     loadRACQueue();
+
+    // ✅ WebSocket listener for instant refresh
+    const ws = new WebSocket('ws://localhost:5000');
+
+    ws.onopen = () => {
+      console.log('RACQueuePage WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Refresh when TTE approves reallocations or any RAC-related event
+        if (message.type === 'RAC_REALLOCATION_APPROVED' || message.type === 'RAC_REALLOCATION') {
+          console.log('✅ RAC update detected, refreshing queue...', message.data);
+          loadRACQueue();
+        }
+      } catch (error) {
+        console.error('WebSocket message parse error:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => ws.close();
   }, []);
 
   const loadRACQueue = async () => {
