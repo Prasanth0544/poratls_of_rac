@@ -75,6 +75,18 @@ router.post('/passenger/self-cancel',
   (req, res) => passengerController.selfCancelTicket(req, res)
 );
 
+// ✅ DUAL-APPROVAL: Passenger can approve their own RAC upgrade
+router.post('/passenger/approve-upgrade',
+  authMiddleware,
+  (req, res) => passengerController.approveUpgrade(req, res)
+);
+
+// ✅ DUAL-APPROVAL: Get pending upgrades for a passenger
+router.get('/passenger/pending-upgrades/:irctcId',
+  authMiddleware,
+  (req, res) => passengerController.getPendingUpgrades(req, res)
+);
+
 // ========== OTP ROUTES ==========
 // Send OTP for verification
 router.post('/otp/send',
@@ -652,15 +664,7 @@ router.post('/tte/confirm-all-boarded',
   (req, res) => tteController.confirmAllBoarded(req, res)
 );
 
-// Mark individual passenger as NO_SHOW
-router.post('/tte/mark-no-show',
-  authMiddleware,
-  requireRole(['TTE', 'ADMIN']),
-  validationMiddleware.sanitizeBody,
-  validationMiddleware.checkTrainInitialized,
-  validationMiddleware.checkJourneyStarted,
-  (req, res) => tteController.markNoShow(req, res)
-);
+// NOTE: /tte/mark-no-show route defined above at lines 43-47 with proper auth middleware
 
 // ========== TEMPORARY FIX: Mark RAC as Boarded ==========
 router.post('/admin/fix-rac-boarding',
@@ -716,10 +720,7 @@ router.post('/passenger/push-unsubscribe',
   (req, res) => passengerController.unsubscribeFromPush(req, res)
 );
 
-// Self-revert NO-SHOW (passenger initiated)
-router.post('/passenger/revert-no-show',
-  (req, res) => passengerController.selfRevertNoShow(req, res)
-);
+// NOTE: /passenger/revert-no-show route defined above at lines 57-61
 
 // Get in-app notifications for passenger
 router.get('/passenger/notifications',
@@ -735,6 +736,54 @@ router.post('/passenger/notifications/:id/read',
 router.post('/passenger/notifications/mark-all-read',
   (req, res) => passengerController.markAllNotificationsRead(req, res)
 );
+
+// ========== TTE PUSH NOTIFICATION ROUTES ==========
+const PushSubscriptionService = require('../services/PushSubscriptionService');
+const WebPushService = require('../services/WebPushService');
+
+// TTE subscribe to push notifications
+router.post('/tte/push-subscribe',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { subscription } = req.body;
+      const tteId = req.user.username || req.user.id;
+
+      await PushSubscriptionService.addTTESubscription(tteId, subscription);
+
+      res.json({ success: true, message: 'TTE subscribed to push notifications' });
+    } catch (error) {
+      console.error('❌ TTE push subscribe error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// Admin subscribe to push notifications
+router.post('/admin/push-subscribe',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { subscription } = req.body;
+      const adminId = req.user.username || req.user.id;
+
+      await PushSubscriptionService.addAdminSubscription(adminId, subscription);
+
+      res.json({ success: true, message: 'Admin subscribed to push notifications' });
+    } catch (error) {
+      console.error('❌ Admin push subscribe error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// Get VAPID public key (for frontend push subscription)
+router.get('/push/vapid-key', (req, res) => {
+  res.json({
+    success: true,
+    vapidPublicKey: WebPushService.getVapidPublicKey()
+  });
+});
 
 
 module.exports = router;

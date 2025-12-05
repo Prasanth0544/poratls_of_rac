@@ -395,6 +395,7 @@ class CurrentStationReallocationService {
     /**
      * Create pending reallocations from matches
      * Sends to TTE portal for approval
+     * DUAL-APPROVAL: Also sends to Passenger Portal if Passenger_Status === 'Online'
      */
     async createPendingReallocationsFromMatches(trainState) {
         const { matches, currentStation } = this.getCurrentStationData(trainState);
@@ -405,9 +406,29 @@ class CurrentStationReallocationService {
         }
 
         const pendingReallocations = [];
+        const db = require('../config/db');
+        const passengersCollection = db.getPassengersCollection();
 
         for (const match of matches) {
             const { berthId, berth, topMatch } = match;
+
+            // Fetch IRCTC_ID and Passenger_Status from MongoDB
+            let irctcId = null;
+            let passengerStatus = topMatch.passengerStatus || 'Offline';
+
+            try {
+                const dbPassenger = await passengersCollection.findOne({ PNR_Number: topMatch.pnr });
+                if (dbPassenger) {
+                    irctcId = dbPassenger.IRCTC_ID;
+                    passengerStatus = dbPassenger.Passenger_Status || passengerStatus;
+                }
+            } catch (err) {
+                console.warn(`⚠️ Could not fetch IRCTC_ID for ${topMatch.pnr}:`, err.message);
+            }
+
+            // Determine approval target based on passenger status
+            const isOnline = passengerStatus === 'Online';
+            const approvalTarget = isOnline ? 'BOTH' : 'TTE_ONLY';
 
             // Create pending reallocation for top match
             const pending = {
@@ -420,6 +441,8 @@ class CurrentStationReallocationService {
                 // Passenger details
                 passengerPNR: topMatch.pnr,
                 passengerName: topMatch.name,
+                passengerIrctcId: irctcId,           // ✅ NEW: For passenger portal lookup
+                passengerStatus: passengerStatus,    // ✅ NEW: Online/Offline
                 currentRAC: topMatch.racStatus,
                 currentBerth: `RAC - ${topMatch.racStatus} `,
                 passengerDestination: topMatch.destination,
@@ -440,26 +463,109 @@ class CurrentStationReallocationService {
                     ? 'Perfect match - destination equals berth vacancy end'
                     : `Good match - travels ${topMatch.matchScore} stations beyond`,
 
-                // Status
+                // ✅ DUAL-APPROVAL: Status tracking
                 status: 'pending',
+                approvalTarget: approvalTarget,      // 'BOTH' or 'TTE_ONLY'
+                approvedBy: null,                    // 'TTE' or 'PASSENGER' when approved
                 createdAt: new Date(),
                 createdBy: 'CURRENT_STATION_MATCHING'
             };
 
             pendingReallocations.push(pending);
+
+            console.log(`   📝 Created pending: ${topMatch.name} (${passengerStatus}) → ${berthId} [${approvalTarget}]`);
         }
 
         // Save to MongoDB using existing StationWiseApprovalService
         await StationWiseApprovalService._savePendingReallocations(pendingReallocations);
 
-        console.log(`✅ Created ${pendingReallocations.length} pending reallocations for TTE approval`);
+        // 📨 Send push notification to all TTEs
+        try {
+            const WebPushService = require('./WebPushService');
+            await WebPushService.sendRACApprovalRequestToTTEs({
+                count: pendingReallocations.length,
+                station: currentStation.name
+            });
+            console.log(`📨 Push notification sent to TTEs for ${pendingReallocations.length} pending reallocations`);
+        } catch (pushError) {
+            console.error('⚠️ Failed to send TTE push notification:', pushError.message);
+        }
+
+        // ✅ DUAL-APPROVAL: Notify Online passengers via push + WebSocket
+        const onlineReallocations = pendingReallocations.filter(p => p.approvalTarget === 'BOTH' && p.passengerIrctcId);
+
+        if (onlineReallocations.length > 0) {
+            console.log(`\n📲 Sending upgrade offers to ${onlineReallocations.length} ONLINE passengers...`);
+
+            const WebPushService = require('./WebPushService');
+            const wsManager = require('../config/websocket');
+            const NotificationService = require('./NotificationService');
+
+            for (const pending of onlineReallocations) {
+                try {
+                    // Send browser push notification
+                    await WebPushService.sendUpgradeOfferToPassenger(pending.passengerIrctcId, {
+                        pnr: pending.passengerPNR,
+                        currentBerth: pending.currentRAC,
+                        offeredBerth: pending.proposedBerthFull,
+                        offeredBerthType: pending.proposedBerthType,
+                        offeredCoach: pending.proposedCoach
+                    });
+
+                    // Also send via WebSocket for instant UI update
+                    wsManager.broadcast('PASSENGER', 'UPGRADE_OFFER_AVAILABLE', {
+                        irctcId: pending.passengerIrctcId,
+                        pnr: pending.passengerPNR,
+                        offer: {
+                            reallocationId: pending._id?.toString(),
+                            offeredBerth: pending.proposedBerthFull,
+                            offeredBerthType: pending.proposedBerthType,
+                            offeredCoach: pending.proposedCoach,
+                            currentStatus: pending.currentRAC
+                        }
+                    });
+
+                    // ✅ TASK 2: Send email notification for approval request
+                    try {
+                        const passengersCollection = db.getPassengersCollection();
+                        const dbPassenger = await passengersCollection.findOne({ IRCTC_ID: pending.passengerIrctcId });
+
+                        if (dbPassenger?.Email) {
+                            await NotificationService.sendApprovalRequestNotification(
+                                {
+                                    name: pending.passengerName,
+                                    email: dbPassenger.Email,
+                                    pnr: pending.passengerPNR
+                                },
+                                {
+                                    currentRAC: pending.currentRAC,
+                                    proposedBerthFull: pending.proposedBerthFull,
+                                    proposedBerthType: pending.proposedBerthType,
+                                    stationName: pending.stationName
+                                }
+                            );
+                        }
+                    } catch (emailErr) {
+                        console.error(`   ⚠️ Email notification failed:`, emailErr.message);
+                    }
+
+                    console.log(`   ✅ Sent upgrade offer to ${pending.passengerName} (${pending.passengerIrctcId})`);
+                } catch (err) {
+                    console.error(`   ❌ Failed to notify ${pending.passengerName}:`, err.message);
+                }
+            }
+        }
+
+        console.log(`✅ Created ${pendingReallocations.length} pending reallocations for approval`);
 
         return {
             success: true,
             created: pendingReallocations.length,
-            pendingReallocations: pendingReallocations
+            pendingReallocations: pendingReallocations,
+            onlineCount: onlineReallocations.length
         };
     }
 }
 
 module.exports = new CurrentStationReallocationService();
+

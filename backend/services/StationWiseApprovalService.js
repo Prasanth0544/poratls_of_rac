@@ -321,6 +321,18 @@ class StationWiseApprovalService {
 
                         console.log(`   ✅ Approved: ${pending.passengerName} → ${pending.proposedBerthFull}`);
                         results.push({ id, success: true, passenger: pending.passengerName });
+
+                        // 📨 Send push notification to Admin portal
+                        try {
+                            const WebPushService = require('./WebPushService');
+                            await WebPushService.sendApprovalNotificationToAdmins({
+                                pnr: pending.passengerPNR,
+                                passengerName: pending.passengerName,
+                                berth: pending.proposedBerthFull
+                            });
+                        } catch (pushError) {
+                            console.error('⚠️ Failed to send Admin push:', pushError.message);
+                        }
                     }
                 } catch (error) {
                     console.error(`   ❌ Error approving ${id}:`, error.message);
@@ -348,6 +360,9 @@ class StationWiseApprovalService {
             const database = db.getPassengersCollection().s.db;
             const collection = database.collection('station_reallocations');
 
+            // Get the pending reallocation first (for notification)
+            const pending = await collection.findOne({ _id: new ObjectId(reallocationId) });
+
             const result = await collection.updateOne(
                 { _id: new ObjectId(reallocationId) },
                 {
@@ -362,6 +377,45 @@ class StationWiseApprovalService {
 
             if (result.modifiedCount > 0) {
                 console.log(`   ❌ Rejected reallocation: ${reallocationId}`);
+
+                // ✅ Notify the passenger about rejection
+                if (pending && pending.passengerIrctcId) {
+                    try {
+                        // Send push notification
+                        const WebPushService = require('./WebPushService');
+                        await WebPushService.sendPushNotification(pending.passengerIrctcId, {
+                            title: '❌ Upgrade Rejected',
+                            body: `Your upgrade to ${pending.proposedBerthFull} was rejected. Reason: ${reason}`,
+                            icon: '/logo192.png',
+                            url: 'http://localhost:5175/#/dashboard',
+                            data: {
+                                type: 'RAC_UPGRADE_REJECTED',
+                                pnr: pending.passengerPNR,
+                                reason: reason
+                            }
+                        });
+                        console.log(`   📲 Rejection push sent to ${pending.passengerIrctcId}`);
+                    } catch (pushErr) {
+                        console.error('   ⚠️ Rejection push failed:', pushErr.message);
+                    }
+
+                    // WebSocket broadcast to update passenger portal
+                    try {
+                        wsManager.broadcast({
+                            type: 'RAC_UPGRADE_REJECTED',
+                            data: {
+                                reallocationId: reallocationId,
+                                irctcId: pending.passengerIrctcId,
+                                pnr: pending.passengerPNR,
+                                reason: reason,
+                                rejectedBy: tteId
+                            }
+                        });
+                    } catch (wsErr) {
+                        console.error('   ⚠️ WebSocket broadcast failed:', wsErr.message);
+                    }
+                }
+
                 return { success: true, message: 'Reallocation rejected' };
             } else {
                 return { success: false, message: 'Reallocation not found' };

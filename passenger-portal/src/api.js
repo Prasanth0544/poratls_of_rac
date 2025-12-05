@@ -10,6 +10,34 @@ const api = axios.create({
     }
 });
 
+// Add request interceptor to attach token to all requests
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// Add response interceptor to handle token expiration
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            // Token expired or invalid
+            localStorage.removeItem('token');
+            localStorage.removeItem('passengerPNR');
+            console.warn('⚠️ Session expired. Please login again.');
+        }
+        return Promise.reject(error);
+    }
+);
+
 // Passenger Portal API
 export const passengerAPI = {
     // Public PNR lookup

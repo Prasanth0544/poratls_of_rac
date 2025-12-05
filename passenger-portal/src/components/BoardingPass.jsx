@@ -20,12 +20,27 @@ import './BoardingPass.css';
 function BoardingPass({ passenger }) {
     const [showQR, setShowQR] = useState(true);
 
-    // Generate QR data (JSON with passenger details)
+    // Generate QR data (JSON with complete passenger details including berth info)
+    // ✅ QR code updates automatically when passenger is upgraded (status, coach, berth change)
     const qrData = JSON.stringify({
         pnr: passenger?.PNR_Number || 'N/A',
         name: passenger?.Name || 'Passenger',
         train: passenger?.Train_Number || 'N/A',
-        date: passenger?.Journey_Date || new Date().toLocaleDateString()
+        trainName: passenger?.Train_Name || 'N/A',
+        date: passenger?.Journey_Date || new Date().toLocaleDateString(),
+        // ✅ These fields change when upgraded from RAC to CNF
+        status: passenger?.PNR_Status || 'N/A',
+        coach: passenger?.Assigned_Coach || 'N/A',
+        berth: passenger?.Assigned_berth || 'N/A',
+        berthType: passenger?.Berth_Type || 'N/A',
+        class: passenger?.Class || 'N/A',
+        from: passenger?.Boarding_Station || 'N/A',
+        to: passenger?.Deboarding_Station || 'N/A',
+        // Upgrade indicator
+        upgraded: passenger?.Upgraded_From ? true : false,
+        upgradedFrom: passenger?.Upgraded_From || null,
+        // Timestamp for freshness verification
+        generated: new Date().toISOString()
     });
 
     const handlePrint = () => {

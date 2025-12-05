@@ -67,7 +67,7 @@ export const getTrains = () =>
 // ========================== VISUALIZATION APIs ==========================
 
 export const getStationSchedule = async () => {
-  const response = await axios.get(`${API_BASE_URL}/visualization/station-schedule`);
+  const response = await api.get('/visualization/station-schedule');
   return response.data;
 };
 
@@ -146,7 +146,7 @@ export const getRACtoCNF = () =>
 // ========================== ADD / UPDATE APIs ==========================
 
 export const addPassenger = async (passengerData) => {
-  const response = await axios.post(`${API_BASE_URL}/passengers/add`, passengerData);
+  const response = await api.post('/passengers/add', passengerData);
   return response.data;
 };
 

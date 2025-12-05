@@ -104,173 +104,6 @@
     cursor: not-allowed;
 }
 
-/* Reallocations Grid */
-.reallocations-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 20px;
-}
-
-.reallocation-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s;
-    position: relative;
-}
-
-.reallocation-card:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
-}
-
-.card-checkbox {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-}
-
-.card-checkbox input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-right: 40px;
-}
-
-.card-header h3 {
-    font-size: 18px;
-    color: #1e293b;
-    margin: 0;
-}
-
-.station-badge {
-    background: #f1f5f9;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    color: #64748b;
-}
-
-.card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 15px;
-}
-
-.detail-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.detail-row.highlight {
-    background: #fef3c7;
-    padding: 10px;
-    border-radius: 8px;
-    border-bottom: none;
-}
-
-.detail-row .label {
-    font-weight: 600;
-    color: #64748b;
-}
-
-.detail-row .value {
-    color: #1e293b;
-}
-
-.detail-row .value.proposed {
-    color: #f59e0b;
-    font-weight: 700;
-    font-size: 16px;
-}
-
-.detail-row .value.current {
-    color: #3b82f6;
-    font-weight: 600;
-}
-
-/* Card Actions */
-.card-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-approve-single,
-.btn-reject {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.btn-approve-single {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-}
-
-.btn-approve-single:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-
-.btn-reject {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.btn-reject:hover:not(:disabled) {
-    background: #fecaca;
-    transform: translateY(-2px);
-}
-
-/* Rejection Form */
-.rejection-form {
-    display: flex;
-    gap: 8px;
-    width: 100%;
-}
-
-.rejection-form input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 2px solid #e2e8f0;
-    border-radius: 8px;
-    font-size: 14px;
-}
-
-.btn-confirm-reject,
-.btn-cancel {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.btn-confirm-reject {
-    background: #dc2626;
-    color: white;
-}
-
-.btn-cancel {
-    background: #e2e8f0;
-    color: #64748b;
-}
-
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -298,5 +131,179 @@
     text-align: center;
     padding: 60px 20px;
     font-size: 24px;
+    color: #64748b;
+}
+
+/* ============= TABLE STYLES ============= */
+.table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+}
+
+.reallocations-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 1000px;
+}
+
+.reallocations-table thead {
+    background: linear-gradient(135deg, #475569, #334155);
+}
+
+.reallocations-table thead th {
+    color: white;
+    padding: 14px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.reallocations-table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+    transition: all 0.2s;
+}
+
+.reallocations-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.reallocations-table tbody tr.selected {
+    background: #eff6ff;
+}
+
+.reallocations-table tbody td {
+    padding: 12px;
+    vertical-align: middle;
+}
+
+.reallocations-table td.passenger-name {
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+}
+
+.reallocations-table td.pnr {
+    font-family: monospace;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.reallocations-table .station-badge {
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #475569;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.reallocations-table td.journey {
+    color: #64748b;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.reallocations-table .status-rac {
+    background: #fef3c7;
+    color: #b45309;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 12px;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.reallocations-table .status-proposed {
+    background: #dcfce7;
+    color: #15803d;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 12px;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.reallocations-table td.berth-vacant {
+    color: #64748b;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.reallocations-table td.actions {
+    white-space: nowrap;
+}
+
+.reallocations-table .action-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-approve-small,
+.btn-reject-small {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.btn-approve-small {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.btn-approve-small:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+.btn-reject-small {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-reject-small:hover:not(:disabled) {
+    background: #fecaca;
+}
+
+.rejection-form-inline {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.rejection-form-inline input {
+    width: 120px;
+    padding: 4px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.btn-confirm-small,
+.btn-cancel-small {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-confirm-small {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-cancel-small {
+    background: #e2e8f0;
     color: #64748b;
 }

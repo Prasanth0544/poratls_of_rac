@@ -173,6 +173,99 @@ class WebPushService {
         console.log(`📊 TTE Push: ${sent}/${subscriptions.length} sent`);
         return { sent, failed: subscriptions.length - sent };
     }
+
+    /**
+     * Send push to ALL Admin portals
+     */
+    async sendPushToAllAdmins(payload) {
+        const subscriptions = await PushSubscriptionService.getAllAdminSubscriptions();
+
+        if (subscriptions.length === 0) {
+            console.log('⚠️  No Admin subscriptions');
+            return { sent: 0, failed: 0 };
+        }
+
+        console.log(`📡 Broadcasting to ${subscriptions.length} Admin devices`);
+
+        const promises = subscriptions.map(async (sub) => {
+            try {
+                await webPush.sendNotification(sub, JSON.stringify(payload));
+                return { success: true };
+            } catch (err) {
+                console.error('❌ Admin push failed:', err.message);
+                return { success: false };
+            }
+        });
+
+        const results = await Promise.allSettled(promises);
+        const sent = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+
+        console.log(`📊 Admin Push: ${sent}/${subscriptions.length} sent`);
+        return { sent, failed: subscriptions.length - sent };
+    }
+
+    /**
+     * Notify TTEs when RAC passengers are sent for approval
+     */
+    async sendRACApprovalRequestToTTEs(data) {
+        return await this.sendPushToAllTTEs({
+            title: '🔔 RAC Upgrades Pending Approval',
+            body: `${data.count} RAC passenger(s) need your approval at ${data.station}`,
+            icon: '/logo192.png',
+            badge: '/badge.png',
+            url: 'http://localhost:5174/#/station-approval',
+            data: {
+                type: 'RAC_APPROVAL_REQUIRED',
+                count: data.count,
+                station: data.station,
+                timestamp: new Date().toISOString()
+            }
+        });
+    }
+
+    /**
+     * Notify Admins when TTE approves an upgrade
+     */
+    async sendApprovalNotificationToAdmins(data) {
+        return await this.sendPushToAllAdmins({
+            title: '✅ RAC Upgrade Approved',
+            body: `${data.passengerName} (${data.pnr}) upgraded to ${data.berth}`,
+            icon: '/logo192.png',
+            badge: '/badge.png',
+            url: 'http://localhost:3000/#/phase-one',
+            data: {
+                type: 'RAC_UPGRADE_APPROVED',
+                pnr: data.pnr,
+                passengerName: data.passengerName,
+                berth: data.berth,
+                timestamp: new Date().toISOString()
+            }
+        });
+    }
+
+    /**
+     * ✅ DUAL-APPROVAL: Send upgrade offer to Online passenger
+     * Called when RAC passengers are sent for approval and passenger is Online
+     */
+    async sendUpgradeOfferToPassenger(irctcId, data) {
+        return await this.sendPushNotification(irctcId, {
+            title: '🎉 Upgrade Offer Available!',
+            body: `You can upgrade from ${data.currentBerth} to ${data.offeredBerth}. Tap to approve!`,
+            icon: '/logo192.png',
+            badge: '/badge.png',
+            url: 'http://localhost:5175/#/dashboard',
+            data: {
+                type: 'DUAL_APPROVAL_UPGRADE_OFFER',
+                pnr: data.pnr,
+                currentBerth: data.currentBerth,
+                offeredBerth: data.offeredBerth,
+                offeredBerthType: data.offeredBerthType,
+                offeredCoach: data.offeredCoach,
+                timestamp: new Date().toISOString()
+            }
+        });
+    }
 }
 
 module.exports = new WebPushService();
+

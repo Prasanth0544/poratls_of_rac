@@ -18,6 +18,9 @@ import VisualizationPage from './pages/VisualizationPage'; // ✅ NEW - Train Jo
 import './App.css';
 import './UserMenu.css'; // ✅ 3-dot menu styling
 
+// ✅ Push notification service for TTE alerts
+import { initializePushNotifications } from './services/pushNotificationService';
+
 // Temporary Placeholder Components (until features are implemented)
 // REMOVED: Placeholder Dashboard - using real component from ./pages/DashboardPage
 
@@ -69,6 +72,16 @@ function App() {
         if (token && userData) {
             setIsAuthenticated(true);
             setUser(JSON.parse(userData));
+
+            // ✅ Initialize push notifications when authenticated
+            initializePushNotifications(() => {
+                console.log('🔄 TTE Portal: Refreshing due to push notification...');
+                window.location.reload();
+            }).then(result => {
+                if (result.success) {
+                    console.log('✅ TTE push notifications ready');
+                }
+            });
         }
 
         // Handle window resize for mobile detection

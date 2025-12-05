@@ -195,6 +195,14 @@ class Database {
     return this.trainDetailsCollection;
   }
 
+  // ✅ DUAL-APPROVAL: Get station_reallocations collection for pending upgrades
+  getStationReallocationCollection() {
+    if (!this.passengersDb) {
+      throw new Error('Passengers database not initialized. Call connect() first.');
+    }
+    return this.passengersDb.collection('station_reallocations');
+  }
+
   async close() {
     try {
       if (stationsClient) await stationsClient.close();

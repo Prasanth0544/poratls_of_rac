@@ -214,6 +214,77 @@ class PushSubscriptionService {
         }
         return deleted;
     }
+
+    // ============ ADMIN SUBSCRIPTION METHODS ============
+
+    /**
+     * Add a push subscription for an Admin
+     */
+    async addAdminSubscription(adminId, subscription, userAgent = '') {
+        if (!adminId) {
+            throw new Error('Admin ID is required');
+        }
+
+        if (!subscription || !subscription.endpoint) {
+            throw new Error('Invalid subscription object');
+        }
+
+        if (!this.adminSubscriptions) {
+            this.adminSubscriptions = new Map();
+        }
+
+        if (!this.adminSubscriptions.has(adminId)) {
+            this.adminSubscriptions.set(adminId, []);
+        }
+
+        const existing = this.adminSubscriptions.get(adminId);
+        const isDuplicate = existing.some(sub => sub.endpoint === subscription.endpoint);
+
+        if (!isDuplicate) {
+            this.adminSubscriptions.get(adminId).push(subscription);
+            console.log(`✅ Added Admin push subscription for ${adminId}`);
+        } else {
+            console.log(`ℹ️  Admin subscription already exists for ${adminId}`);
+        }
+
+        return true;
+    }
+
+    /**
+     * Get ALL Admin subscriptions (for broadcasting to all Admins)
+     */
+    async getAllAdminSubscriptions() {
+        if (!this.adminSubscriptions) {
+            return [];
+        }
+        const allSubs = [];
+        for (const subs of this.adminSubscriptions.values()) {
+            allSubs.push(...subs);
+        }
+        return allSubs;
+    }
+
+    /**
+     * Remove an Admin subscription
+     */
+    async removeAdminSubscription(adminId, endpoint) {
+        if (!this.adminSubscriptions) return false;
+
+        const subs = this.adminSubscriptions.get(adminId);
+        if (!subs) return false;
+
+        const index = subs.findIndex(sub => sub.endpoint === endpoint);
+        if (index !== -1) {
+            subs.splice(index, 1);
+            console.log(`🗑️  Removed Admin subscription for ${adminId}`);
+            if (subs.length === 0) {
+                this.adminSubscriptions.delete(adminId);
+            }
+            return true;
+        }
+        return false;
+    }
 }
 
 module.exports = new PushSubscriptionService();
+

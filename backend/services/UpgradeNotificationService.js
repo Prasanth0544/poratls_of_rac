@@ -1,18 +1,38 @@
 // backend/services/UpgradeNotificationService.js
+// UPDATED: Now uses MongoDB for persistence (survives server restarts)
 
 const db = require("../config/db");
 
 class UpgradeNotificationService {
     constructor() {
-        // In-memory tracking of upgrade notifications and denials
-        this.pendingNotifications = new Map(); // pnr -> array of notifications
-        this.denialLog = []; // Array of denial records
+        this.collectionName = 'upgrade_notifications';
+        this.denialLogCollection = 'upgrade_denial_log';
+        this.initialized = false;
+        console.log('📩 UpgradeNotificationService initialized (MongoDB-backed)');
+    }
+
+    /**
+     * Get MongoDB collection
+     */
+    async getCollection() {
+        const racDb = await db.getDb();
+        return racDb.collection(this.collectionName);
+    }
+
+    /**
+     * Get denial log collection
+     */
+    async getDenialCollection() {
+        const racDb = await db.getDb();
+        return racDb.collection(this.denialLogCollection);
     }
 
     /**
      * Create upgrade notification for RAC passenger
      */
-    createUpgradeNotification(racPassenger, vacantBerth, currentStation) {
+    async createUpgradeNotification(racPassenger, vacantBerth, currentStation) {
+        const collection = await this.getCollection();
+
         const notification = {
             id: `UPGRADE_${Date.now()}_${racPassenger.pnr}`,
             pnr: racPassenger.pnr,
@@ -26,14 +46,11 @@ class UpgradeNotificationService {
             stationCode: currentStation.code,
             timestamp: new Date().toISOString(),
             status: 'PENDING', // PENDING, ACCEPTED, DENIED
-            vacantSegment: vacantBerth.vacantSegment
+            vacantSegment: vacantBerth.vacantSegment,
+            createdAt: new Date()
         };
 
-        if (!this.pendingNotifications.has(racPassenger.pnr)) {
-            this.pendingNotifications.set(racPassenger.pnr, []);
-        }
-
-        this.pendingNotifications.get(racPassenger.pnr).push(notification);
+        await collection.insertOne(notification);
 
         console.log(`📩 Upgrade notification created for ${racPassenger.name} (${racPassenger.pnr})`);
         console.log(`   Offered: ${vacantBerth.fullBerthNo} (${vacantBerth.type})`);
@@ -44,142 +61,146 @@ class UpgradeNotificationService {
     /**
      * Accept upgrade offer
      */
-    acceptUpgrade(pnr, notificationId) {
-        const notifications = this.pendingNotifications.get(pnr);
+    async acceptUpgrade(pnr, notificationId) {
+        const collection = await this.getCollection();
 
-        if (!notifications) {
-            throw new Error(`No notifications found for PNR ${pnr}`);
-        }
-
-        const notification = notifications.find(n => n.id === notificationId);
+        const notification = await collection.findOne({ id: notificationId, pnr });
 
         if (!notification) {
-            throw new Error(`Notification ${notificationId} not found`);
+            throw new Error(`Notification ${notificationId} not found for PNR ${pnr}`);
         }
 
         if (notification.status !== 'PENDING') {
             throw new Error(`Notification already ${notification.status}`);
         }
 
-        notification.status = 'ACCEPTED';
-        notification.acceptedAt = new Date().toISOString();
+        await collection.updateOne(
+            { id: notificationId },
+            {
+                $set: {
+                    status: 'ACCEPTED',
+                    acceptedAt: new Date().toISOString()
+                }
+            }
+        );
 
         console.log(`✅ Upgrade accepted by ${notification.name} (${pnr})`);
 
-        return notification;
+        return { ...notification, status: 'ACCEPTED', acceptedAt: new Date().toISOString() };
     }
 
     /**
      * Deny upgrade offer
      */
-    denyUpgrade(pnr, notificationId, reason = 'Passenger declined') {
-        const notifications = this.pendingNotifications.get(pnr);
+    async denyUpgrade(pnr, notificationId, reason = 'Passenger declined') {
+        const collection = await this.getCollection();
+        const denialCollection = await this.getDenialCollection();
 
-        if (!notifications) {
-            throw new Error(`No notifications found for PNR ${pnr}`);
-        }
-
-        const notification = notifications.find(n => n.id === notificationId);
+        const notification = await collection.findOne({ id: notificationId, pnr });
 
         if (!notification) {
-            throw new Error(`Notification ${notificationId} not found`);
+            throw new Error(`Notification ${notificationId} not found for PNR ${pnr}`);
         }
 
         if (notification.status !== 'PENDING') {
             throw new Error(`Notification already ${notification.status}`);
         }
 
-        notification.status = 'DENIED';
-        notification.deniedAt = new Date().toISOString();
-        notification.denialReason = reason;
+        const deniedAt = new Date().toISOString();
+
+        await collection.updateOne(
+            { id: notificationId },
+            {
+                $set: {
+                    status: 'DENIED',
+                    deniedAt,
+                    denialReason: reason
+                }
+            }
+        );
 
         // Log denial
-        this.denialLog.push({
-            pnr: pnr,
+        await denialCollection.insertOne({
+            pnr,
             name: notification.name,
             offeredBerth: notification.offeredBerth,
             station: notification.station,
-            timestamp: notification.deniedAt,
-            reason: reason
+            timestamp: deniedAt,
+            reason,
+            createdAt: new Date()
         });
 
         console.log(`❌ Upgrade denied by ${notification.name} (${pnr}): ${reason}`);
 
-        return notification;
+        return { ...notification, status: 'DENIED', deniedAt, denialReason: reason };
     }
 
     /**
      * Get pending notifications for passenger
      */
-    getPendingNotifications(pnr) {
-        const notifications = this.pendingNotifications.get(pnr) || [];
-        return notifications.filter(n => n.status === 'PENDING');
+    async getPendingNotifications(pnr) {
+        const collection = await this.getCollection();
+        return await collection.find({ pnr, status: 'PENDING' }).toArray();
     }
 
     /**
      * Get all notifications for passenger
      */
-    getAllNotifications(pnr) {
-        return this.pendingNotifications.get(pnr) || [];
+    async getAllNotifications(pnr) {
+        const collection = await this.getCollection();
+        return await collection.find({ pnr }).sort({ createdAt: -1 }).toArray();
     }
 
     /**
      * Clear notifications for passenger
      */
-    clearNotifications(pnr) {
-        this.pendingNotifications.delete(pnr);
+    async clearNotifications(pnr) {
+        const collection = await this.getCollection();
+        await collection.deleteMany({ pnr });
     }
 
     /**
      * Get denial log
      */
-    getDenialLog() {
-        return this.denialLog;
+    async getDenialLog() {
+        const denialCollection = await this.getDenialCollection();
+        return await denialCollection.find({}).sort({ createdAt: -1 }).toArray();
     }
 
     /**
      * Check if passenger has denied this specific berth recently
      */
-    hasDeniedBerth(pnr, berthNo) {
-        const notifications = this.pendingNotifications.get(pnr) || [];
-        return notifications.some(n =>
-            n.offeredBerth === berthNo && n.status === 'DENIED'
-        );
+    async hasDeniedBerth(pnr, berthNo) {
+        const collection = await this.getCollection();
+        const denial = await collection.findOne({
+            pnr,
+            offeredBerth: berthNo,
+            status: 'DENIED'
+        });
+        return !!denial;
     }
 
     /**
      * Get all sent notifications (for TTE portal tracking)
-     * Returns all upgrade offers sent to passengers with their status
      */
-    getAllSentNotifications() {
-        const allNotifications = [];
+    async getAllSentNotifications() {
+        const collection = await this.getCollection();
+        const notifications = await collection.find({}).sort({ createdAt: -1 }).toArray();
 
-        for (const [pnr, notifications] of this.pendingNotifications.entries()) {
-            notifications.forEach(notification => {
-                allNotifications.push({
-                    pnr: notification.pnr,
-                    passengerName: notification.name,
-                    offeredBerth: notification.offeredBerth,
-                    coach: notification.offeredCoach,
-                    berthNo: notification.offeredSeatNo,
-                    berthType: notification.offeredBerthType,
-                    sentAt: notification.timestamp,
-                    expiresAt: null, // Can add expiry logic if needed
-                    status: notification.status.toLowerCase(),
-                    respondedAt: notification.acceptedAt || notification.deniedAt || null,
-                    offerId: notification.id
-                });
-            });
-        }
-
-        // Sort by most recent first
-        allNotifications.sort((a, b) =>
-            new Date(b.sentAt) - new Date(a.sentAt)
-        );
-
-        return allNotifications;
+        return notifications.map(notification => ({
+            pnr: notification.pnr,
+            passengerName: notification.name,
+            offeredBerth: notification.offeredBerth,
+            coach: notification.offeredCoach,
+            berthNo: notification.offeredSeatNo,
+            berthType: notification.offeredBerthType,
+            sentAt: notification.timestamp,
+            expiresAt: null,
+            status: notification.status.toLowerCase(),
+            respondedAt: notification.acceptedAt || notification.deniedAt || null,
+            offerId: notification.id
+        }));
     }
 }
-
 
 module.exports = new UpgradeNotificationService();

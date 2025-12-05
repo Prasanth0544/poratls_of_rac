@@ -1500,6 +1500,157 @@ class PassengerController {
       });
     }
   }
+
+  /**
+   * ✅ DUAL-APPROVAL: Get pending upgrade offers for a passenger
+   * GET /api/passenger/pending-upgrades/:irctcId
+   */
+  async getPendingUpgrades(req, res) {
+    try {
+      const { irctcId } = req.params;
+
+      if (!irctcId) {
+        return res.status(400).json({
+          success: false,
+          message: 'IRCTC ID is required'
+        });
+      }
+
+      // Query pending reallocations from MongoDB
+      const stationReallocationCollection = db.getStationReallocationCollection();
+      const pendingUpgrades = await stationReallocationCollection.find({
+        passengerIrctcId: irctcId,
+        status: 'pending',
+        approvalTarget: 'BOTH'  // Only show offers that allow passenger self-approval
+      }).toArray();
+
+      console.log(`📋 Found ${pendingUpgrades.length} pending upgrades for ${irctcId}`);
+
+      res.json({
+        success: true,
+        data: {
+          count: pendingUpgrades.length,
+          upgrades: pendingUpgrades.map(u => ({
+            id: u._id.toString(),
+            pnr: u.passengerPNR,
+            passengerName: u.passengerName,
+            currentBerth: u.currentBerth,
+            proposedCoach: u.proposedCoach,
+            proposedBerth: u.proposedBerth,
+            proposedBerthFull: u.proposedBerthFull,
+            proposedBerthType: u.proposedBerthType,
+            stationName: u.stationName,
+            createdAt: u.createdAt
+          }))
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error getting pending upgrades:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * ✅ DUAL-APPROVAL: Passenger approves their own RAC upgrade
+   * POST /api/passenger/approve-upgrade
+   * Body: { upgradeId, irctcId }
+   */
+  async approveUpgrade(req, res) {
+    try {
+      const { upgradeId, irctcId } = req.body;
+
+      if (!upgradeId || !irctcId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Upgrade ID and IRCTC ID are required'
+        });
+      }
+
+      const { ObjectId } = require('mongodb');
+      const StationWiseApprovalService = require('../services/StationWiseApprovalService');
+      const stationReallocationCollection = db.getStationReallocationCollection();
+
+      // Find the pending reallocation
+      const pending = await stationReallocationCollection.findOne({
+        _id: new ObjectId(upgradeId),
+        passengerIrctcId: irctcId,
+        status: 'pending'
+      });
+
+      if (!pending) {
+        return res.status(404).json({
+          success: false,
+          message: 'Upgrade offer not found or already processed'
+        });
+      }
+
+      // Verify passenger owns this upgrade
+      if (pending.passengerIrctcId !== irctcId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only approve your own upgrade offers'
+        });
+      }
+
+      // Use existing approval service (same logic as TTE approval)
+      const trainState = trainController.getGlobalTrainState();
+      if (!trainState) {
+        return res.status(400).json({
+          success: false,
+          message: 'Train not initialized'
+        });
+      }
+
+      // Perform the actual upgrade using existing service
+      // Note: approveBatch expects (ids, tteId, trainState) - pass trainState, not trainNo
+      const result = await StationWiseApprovalService.approveBatch([upgradeId], 'PASSENGER_SELF', trainState);
+
+      if (result.totalApproved > 0) {
+        // Mark as approved by PASSENGER
+        await stationReallocationCollection.updateOne(
+          { _id: new ObjectId(upgradeId) },
+          { $set: { approvedBy: 'PASSENGER', approvedAt: new Date() } }
+        );
+
+        // Broadcast to TTE portal to remove this from their list
+        if (wsManager) {
+          wsManager.broadcastTrainUpdate('UPGRADE_APPROVED_BY_PASSENGER', {
+            upgradeId: upgradeId,
+            pnr: pending.passengerPNR,
+            passengerName: pending.passengerName,
+            proposedBerth: pending.proposedBerthFull
+          });
+        }
+
+        console.log(`✅ PASSENGER ${irctcId} approved their own upgrade: ${pending.passengerPNR} → ${pending.proposedBerthFull}`);
+
+        res.json({
+          success: true,
+          message: 'Upgrade approved successfully!',
+          data: {
+            pnr: pending.passengerPNR,
+            newBerth: pending.proposedBerthFull,
+            coach: pending.proposedCoach
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: result.errors?.[0] || 'Failed to approve upgrade'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error in passenger approveUpgrade:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new PassengerController();
+

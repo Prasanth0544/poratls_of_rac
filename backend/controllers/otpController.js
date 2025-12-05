@@ -84,7 +84,7 @@ class OTPController {
             }
 
             // Verify OTP
-            const result = OTPService.verifyOTP(irctcId, pnr, otp);
+            const result = await OTPService.verifyOTP(irctcId, pnr, otp);
 
             if (result.success) {
                 res.json({

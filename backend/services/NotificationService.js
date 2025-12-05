@@ -401,6 +401,81 @@ class NotificationService {
             return { success: false, error: error.message };
         }
     }
+
+    /**
+     * ✅ TASK 2: Send approval request notification to Online passenger
+     * Called when Admin sends upgrade for approval and passenger is Online
+     */
+    async sendApprovalRequestNotification(passenger, upgradeDetails) {
+        if (!passenger.email || !process.env.EMAIL_USER) {
+            console.log(`⚠️ Cannot send approval request email - no email configured`);
+            return { sent: false, error: 'No email configured' };
+        }
+
+        try {
+            const mailOptions = {
+                from: `"Indian Railways RAC System" <${process.env.EMAIL_USER}>`,
+                to: passenger.email,
+                subject: '🎫 Upgrade Available! Action Required - Indian Railways',
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                            .header { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                            .upgrade-box { background: #fff; border: 2px solid #27ae60; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                            .btn { display: inline-block; background: #27ae60; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 5px; }
+                            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1 style="margin: 0;">🎫 Upgrade Available!</h1>
+                                <p style="margin: 10px 0 0 0; font-size: 18px;">Action Required</p>
+                            </div>
+                            <div class="content">
+                                <p>Dear <strong>${passenger.name}</strong>,</p>
+                                <p>Great news! A berth upgrade is available for your RAC ticket. You can approve this upgrade directly from your passenger portal.</p>
+                                
+                                <div class="upgrade-box">
+                                    <h3 style="margin-top: 0; color: #27ae60;">Upgrade Details</h3>
+                                    <p><strong>PNR:</strong> ${passenger.pnr}</p>
+                                    <p><strong>Current Status:</strong> RAC - ${upgradeDetails.currentRAC}</p>
+                                    <p><strong>Offered Berth:</strong> ${upgradeDetails.proposedBerthFull}</p>
+                                    <p><strong>Berth Type:</strong> ${upgradeDetails.proposedBerthType}</p>
+                                    <p><strong>Station:</strong> ${upgradeDetails.stationName}</p>
+                                </div>
+                                
+                                <p style="text-align: center;">
+                                    <a href="http://localhost:5175/#/dashboard" class="btn">✓ View & Approve Upgrade</a>
+                                </p>
+                                
+                                <p style="color: #e74c3c; font-weight: bold;">
+                                    ⚠️ Please approve quickly! The TTE can also approve this upgrade, and the first approval wins.
+                                </p>
+                                
+                                <div class="footer">
+                                    <p>Indian Railways - RAC Reallocation System</p>
+                                </div>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            };
+
+            await this.emailTransporter.sendMail(mailOptions);
+            console.log(`📧 Approval request email sent to ${passenger.email}`);
+            return { sent: true };
+        } catch (error) {
+            console.error(`❌ Approval request email failed:`, error.message);
+            return { sent: false, error: error.message };
+        }
+    }
 }
 
 module.exports = new NotificationService();

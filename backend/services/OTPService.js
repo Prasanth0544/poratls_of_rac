@@ -1,12 +1,49 @@
 // backend/services/OTPService.js
+// UPDATED: Now uses MongoDB for OTP storage (survives server restarts)
+
 const crypto = require('crypto');
 const NotificationService = require('./NotificationService');
+const db = require('../config/db');
 
 class OTPService {
     constructor() {
-        // Store OTPs in memory with expiry (in production, use Redis)
-        this.otpStore = new Map();
         this.OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+        this.collectionName = 'otp_store';
+        this.initialized = false;
+
+        console.log('🔐 OTPService initialized (MongoDB-backed)');
+    }
+
+    /**
+     * Initialize MongoDB collection with TTL index
+     */
+    async initializeCollection() {
+        if (this.initialized) return;
+
+        try {
+            const racDb = await db.getDb();
+            const collection = racDb.collection(this.collectionName);
+
+            // Create TTL index for automatic expiry (expires after 5 minutes)
+            await collection.createIndex(
+                { createdAt: 1 },
+                { expireAfterSeconds: 300 } // 5 minutes
+            );
+
+            this.initialized = true;
+            console.log('✅ OTP collection initialized with TTL index');
+        } catch (error) {
+            console.error('❌ Failed to initialize OTP collection:', error.message);
+        }
+    }
+
+    /**
+     * Get OTP collection
+     */
+    async getCollection() {
+        await this.initializeCollection();
+        const racDb = await db.getDb();
+        return racDb.collection(this.collectionName);
     }
 
     /**
@@ -21,18 +58,28 @@ class OTPService {
      */
     async sendOTP(irctcId, pnr, email, purpose = 'verification') {
         try {
+            const collection = await this.getCollection();
+
             // Generate OTP
             const otp = this.generateOTP();
-            const expiryTime = Date.now() + this.OTP_EXPIRY_MS;
-
-            // Store OTP (key: irctcId_pnr)
             const key = `${irctcId}_${pnr}`;
-            this.otpStore.set(key, {
-                otp,
-                expiryTime,
-                attempts: 0,
-                maxAttempts: 3
-            });
+
+            // Store OTP in MongoDB (replaces existing if any)
+            await collection.updateOne(
+                { key },
+                {
+                    $set: {
+                        key,
+                        otp,
+                        irctcId,
+                        pnr,
+                        attempts: 0,
+                        maxAttempts: 3,
+                        createdAt: new Date() // TTL index uses this
+                    }
+                },
+                { upsert: true }
+            );
 
             // Send OTP email
             await NotificationService.emailTransporter.sendMail({
@@ -95,7 +142,7 @@ class OTPService {
                 `
             });
 
-            console.log(`📧 OTP sent to ${email} for ${irctcId}/${pnr}`);
+            console.log(`📧 OTP sent to ${email} for ${irctcId}/${pnr} (stored in MongoDB)`);
 
             return {
                 success: true,
@@ -112,54 +159,60 @@ class OTPService {
     /**
      * Verify OTP
      */
-    verifyOTP(irctcId, pnr, otpInput) {
-        const key = `${irctcId}_${pnr}`;
-        const otpData = this.otpStore.get(key);
+    async verifyOTP(irctcId, pnr, otpInput) {
+        try {
+            const collection = await this.getCollection();
+            const key = `${irctcId}_${pnr}`;
 
-        // Check if OTP exists
-        if (!otpData) {
+            // Find OTP record
+            const otpRecord = await collection.findOne({ key });
+
+            // Check if OTP exists
+            if (!otpRecord) {
+                return {
+                    success: false,
+                    message: 'No OTP found. Please request a new OTP.'
+                };
+            }
+
+            // Check max attempts
+            if (otpRecord.attempts >= otpRecord.maxAttempts) {
+                await collection.deleteOne({ key });
+                return {
+                    success: false,
+                    message: 'Maximum attempts exceeded. Please request a new OTP.'
+                };
+            }
+
+            // Increment attempts
+            await collection.updateOne(
+                { key },
+                { $inc: { attempts: 1 } }
+            );
+
+            // Verify OTP
+            if (otpRecord.otp === otpInput.toString()) {
+                // OTP is correct - delete it
+                await collection.deleteOne({ key });
+                console.log(`✅ OTP verified successfully for ${irctcId}/${pnr}`);
+                return {
+                    success: true,
+                    message: 'OTP verified successfully'
+                };
+            } else {
+                // OTP is incorrect
+                const attemptsLeft = otpRecord.maxAttempts - otpRecord.attempts - 1;
+                return {
+                    success: false,
+                    message: `Invalid OTP. ${attemptsLeft} attempt(s) remaining.`
+                };
+            }
+
+        } catch (error) {
+            console.error('❌ Error verifying OTP:', error);
             return {
                 success: false,
-                message: 'No OTP found. Please request a new OTP.'
-            };
-        }
-
-        // Check if expired
-        if (Date.now() > otpData.expiryTime) {
-            this.otpStore.delete(key);
-            return {
-                success: false,
-                message: 'OTP has expired. Please request a new OTP.'
-            };
-        }
-
-        // Check max attempts
-        if (otpData.attempts >= otpData.maxAttempts) {
-            this.otpStore.delete(key);
-            return {
-                success: false,
-                message: 'Maximum attempts exceeded. Please request a new OTP.'
-            };
-        }
-
-        // Increment attempts
-        otpData.attempts += 1;
-
-        // Verify OTP
-        if (otpData.otp === otpInput.toString()) {
-            // OTP is correct - delete it
-            this.otpStore.delete(key);
-            console.log(`✅ OTP verified successfully for ${irctcId}/${pnr}`);
-            return {
-                success: true,
-                message: 'OTP verified successfully'
-            };
-        } else {
-            // OTP is incorrect
-            const attemptsLeft = otpData.maxAttempts - otpData.attempts;
-            return {
-                success: false,
-                message: `Invalid OTP. ${attemptsLeft} attempt(s) remaining.`
+                message: 'Error verifying OTP. Please try again.'
             };
         }
     }
@@ -167,29 +220,41 @@ class OTPService {
     /**
      * Clear OTP (for cleanup)
      */
-    clearOTP(irctcId, pnr) {
-        const key = `${irctcId}_${pnr}`;
-        this.otpStore.delete(key);
+    async clearOTP(irctcId, pnr) {
+        try {
+            const collection = await this.getCollection();
+            const key = `${irctcId}_${pnr}`;
+            await collection.deleteOne({ key });
+        } catch (error) {
+            console.error('Error clearing OTP:', error.message);
+        }
     }
 
     /**
      * Get OTP status (for debugging)
      */
-    getOTPStatus(irctcId, pnr) {
-        const key = `${irctcId}_${pnr}`;
-        const otpData = this.otpStore.get(key);
+    async getOTPStatus(irctcId, pnr) {
+        try {
+            const collection = await this.getCollection();
+            const key = `${irctcId}_${pnr}`;
+            const otpRecord = await collection.findOne({ key });
 
-        if (!otpData) {
-            return { exists: false };
+            if (!otpRecord) {
+                return { exists: false };
+            }
+
+            return {
+                exists: true,
+                createdAt: otpRecord.createdAt,
+                attempts: otpRecord.attempts,
+                maxAttempts: otpRecord.maxAttempts
+            };
+        } catch (error) {
+            console.error('Error getting OTP status:', error.message);
+            return { exists: false, error: error.message };
         }
-
-        return {
-            exists: true,
-            expiresAt: new Date(otpData.expiryTime),
-            attempts: otpData.attempts,
-            maxAttempts: otpData.maxAttempts
-        };
     }
 }
 
 module.exports = new OTPService();
+

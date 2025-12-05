@@ -85,25 +85,21 @@ class ReallocationService {
       console.log(`\n🔍 Processing vacancy for upgrade: ${vacantBerthInfo.fullBerthNo}`);
       console.log(`   At station: ${currentStation.name} (${currentStation.code})`);
 
-      // Find eligible RAC passengers
-      const eligibleRAC = trainState.racQueue.filter(rac => {
+      // Find eligible RAC passengers (using loop since hasDeniedBerth is async)
+      const eligibleRAC = [];
+      for (const rac of trainState.racQueue) {
         // Must be boarded and online
-        if (!rac.boarded) {
-          return false;
-        }
-
-        if (rac.passengerStatus !== 'Online') {
-          return false;
-        }
+        if (!rac.boarded) continue;
+        if (rac.passengerStatus !== 'Online') continue;
 
         // Check if passenger already denied this specific berth
-        if (UpgradeNotificationService.hasDeniedBerth(rac.pnr, vacantBerthInfo.fullBerthNo)) {
+        if (await UpgradeNotificationService.hasDeniedBerth(rac.pnr, vacantBerthInfo.fullBerthNo)) {
           console.log(`   ⏭️  Skipping ${rac.name} - previously denied ${vacantBerthInfo.fullBerthNo}`);
-          return false;
+          continue;
         }
 
-        return true;
-      });
+        eligibleRAC.push(rac);
+      }
 
       console.log(`   Found ${eligibleRAC.length} eligible RAC passenger(s)`);
 
@@ -113,7 +109,7 @@ class ReallocationService {
 
       for (const racPassenger of eligibleRAC) {
         try {
-          const notification = UpgradeNotificationService.createUpgradeNotification(
+          const notification = await UpgradeNotificationService.createUpgradeNotification(
             racPassenger,
             vacantBerthInfo,
             currentStation
@@ -125,7 +121,7 @@ class ReallocationService {
 
             // Create in-app notification
             if (racPassenger.irctcId) {
-              InAppNotificationService.createNotification(
+              await InAppNotificationService.createNotification(
                 racPassenger.irctcId,
                 'UPGRADE_OFFER',
                 {

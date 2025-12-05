@@ -44,6 +44,10 @@ function DashboardPage() {
     const [settingsAnchor, setSettingsAnchor] = useState(null);
     const [showSettings, setShowSettings] = useState(false);
 
+    // ✅ DUAL-APPROVAL: Pending upgrades for Online passengers
+    const [pendingUpgrades, setPendingUpgrades] = useState([]);
+    const [approvingUpgrade, setApprovingUpgrade] = useState(null);
+
     // Boarding station change modal states
     const [showChangeModal, setShowChangeModal] = useState(false);
     const [changeStep, setChangeStep] = useState(1); // 1=verify, 2=OTP, 3=select station
@@ -105,6 +109,26 @@ function DashboardPage() {
                     console.log('🎉 Upgrade offer received:', data);
                     setUpgradeOffer(data.offer);
                 }
+
+                // ✅ DUAL-APPROVAL: Handle new upgrade offers from station matching
+                if (data.type === 'UPGRADE_OFFER_AVAILABLE' && data.data?.irctcId === userData.irctcId) {
+                    console.log('🎉 Dual-approval upgrade offer received:', data);
+                    fetchPendingUpgrades();
+                }
+
+                // ✅ Remove offer from list if TTE approved it first
+                if (data.type === 'RAC_REALLOCATION_APPROVED') {
+                    fetchPendingUpgrades(); // Refresh to remove approved ones
+                }
+
+                // ✅ Handle rejection - remove from list and notify user
+                if (data.type === 'RAC_UPGRADE_REJECTED' && data.data?.irctcId === userData.irctcId) {
+                    console.log('❌ Upgrade rejected:', data);
+                    // Remove from pending list
+                    setPendingUpgrades(prev => prev.filter(u => u.pnr !== data.data.pnr));
+                    // Show alert to user
+                    alert(`❌ Your upgrade offer was rejected.\nReason: ${data.data.reason}`);
+                }
             } catch (err) {
                 console.error('Error parsing WebSocket message:', err);
             }
@@ -118,6 +142,52 @@ function DashboardPage() {
         return () => {
             ws.close();
             clearInterval(refreshInterval);
+        };
+    }, []);
+
+    // ✅ DUAL-APPROVAL: Separate useEffect to fetch pending upgrades after mount
+    useEffect(() => {
+        // Delay to ensure fetchPendingUpgrades is defined
+        const timer = setTimeout(() => {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            if (userData.irctcId) {
+                // Fetch pending upgrades on mount
+                const fetchUpgrades = async () => {
+                    try {
+                        const response = await axios.get(
+                            `${API_URL}/passenger/pending-upgrades/${userData.irctcId}`,
+                            { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+                        );
+                        if (response.data.success && response.data.data?.upgrades) {
+                            setPendingUpgrades(response.data.data.upgrades);
+                            console.log(`📋 Found ${response.data.data.upgrades.length} pending upgrades`);
+                        }
+                    } catch (err) {
+                        console.error('Error fetching pending upgrades:', err);
+                    }
+                };
+                fetchUpgrades();
+            }
+        }, 500);
+
+        // Also set up interval to periodically check for new offers
+        const upgradeInterval = setInterval(() => {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            if (userData.irctcId) {
+                axios.get(
+                    `${API_URL}/passenger/pending-upgrades/${userData.irctcId}`,
+                    { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+                ).then(res => {
+                    if (res.data.success && res.data.data?.upgrades) {
+                        setPendingUpgrades(res.data.data.upgrades);
+                    }
+                }).catch(() => { });
+            }
+        }, 30000); // Check every 30 seconds
+
+        return () => {
+            clearTimeout(timer);
+            clearInterval(upgradeInterval);
         };
     }, []);
 
@@ -150,6 +220,54 @@ function DashboardPage() {
             setError(err.response?.data?.message || 'Failed to load your booking details');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ✅ DUAL-APPROVAL: Fetch pending upgrade offers for this passenger
+    const fetchPendingUpgrades = async () => {
+        try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!userData.irctcId) return;
+
+            const response = await axios.get(
+                `${API_URL}/passenger/pending-upgrades/${userData.irctcId}`,
+                { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+            );
+
+            if (response.data.success && response.data.data?.upgrades) {
+                setPendingUpgrades(response.data.data.upgrades);
+                console.log(`📋 Found ${response.data.data.upgrades.length} pending upgrades`);
+            }
+        } catch (err) {
+            console.error('Error fetching pending upgrades:', err);
+        }
+    };
+
+    // ✅ DUAL-APPROVAL: Passenger approves their own upgrade
+    const handleApproveUpgrade = async (upgrade) => {
+        if (!window.confirm(`Accept upgrade to ${upgrade.proposedBerthFull} (${upgrade.proposedBerthType})?`)) {
+            return;
+        }
+
+        setApprovingUpgrade(upgrade.id);
+        try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            const response = await axios.post(
+                `${API_URL}/passenger/approve-upgrade`,
+                { upgradeId: upgrade.id, irctcId: userData.irctcId },
+                { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+            );
+
+            if (response.data.success) {
+                alert(`🎉 Upgrade approved! Your new berth: ${response.data.data.newBerth}`);
+                // Remove from list and refresh data
+                setPendingUpgrades(prev => prev.filter(u => u.id !== upgrade.id));
+                fetchData();
+            }
+        } catch (err) {
+            alert('❌ ' + (err.response?.data?.message || 'Failed to approve upgrade'));
+        } finally {
+            setApprovingUpgrade(null);
         }
     };
 
@@ -575,6 +693,75 @@ function DashboardPage() {
 
             {/* Boarding Pass */}
             <BoardingPass passenger={passenger} />
+
+            {/* ✅ DUAL-APPROVAL: Pending Upgrade Offers (for Online passengers) */}
+            {pendingUpgrades.length > 0 && (
+                <Box sx={{
+                    mt: 3,
+                    maxWidth: '900px',
+                    mx: 'auto',
+                    bgcolor: '#ffffff',
+                    borderRadius: '8px',
+                    border: '2px solid #27ae60',
+                    boxShadow: '0 2px 8px rgba(39,174,96,0.15)',
+                    overflow: 'hidden'
+                }}>
+                    <Box sx={{
+                        background: 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)',
+                        color: '#ffffff',
+                        p: 2
+                    }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '16px', m: 0 }}>
+                            🎉 Upgrade Offers Available!
+                        </Typography>
+                        <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+                            You can approve these upgrades directly from here
+                        </Typography>
+                    </Box>
+                    <Box sx={{ p: 2 }}>
+                        {pendingUpgrades.map((upgrade) => (
+                            <Box key={upgrade.id} sx={{
+                                p: 2,
+                                mb: 2,
+                                border: '1px solid #ecf0f1',
+                                borderRadius: '8px',
+                                background: '#f8f9fa',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: 2
+                            }}>
+                                <Box>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#2c3e50' }}>
+                                        Upgrade: {upgrade.currentBerth} → {upgrade.proposedBerthFull}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Coach: {upgrade.proposedCoach} | Berth Type: {upgrade.proposedBerthType}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Station: {upgrade.stationName}
+                                    </Typography>
+                                </Box>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => handleApproveUpgrade(upgrade)}
+                                    disabled={approvingUpgrade === upgrade.id}
+                                    sx={{
+                                        bgcolor: '#27ae60',
+                                        '&:hover': { bgcolor: '#219a52' },
+                                        textTransform: 'none',
+                                        fontWeight: 600,
+                                        px: 3
+                                    }}
+                                >
+                                    {approvingUpgrade === upgrade.id ? 'Approving...' : '✓ Accept Upgrade'}
+                                </Button>
+                            </Box>
+                        ))}
+                    </Box>
+                </Box>
+            )}
 
             {/* Ticket Actions */}
             {!passenger?.NO_show && (

@@ -1,24 +1,37 @@
 // backend/services/InAppNotificationService.js
+// UPDATED: Now uses MongoDB for persistence (survives server restarts)
+
 /**
  * In-App Notification Service
  * Manages real-time notifications for passenger portal
  */
 
+const db = require('../config/db');
+
 class InAppNotificationService {
     constructor() {
-        // Store notifications by IRCTC ID
-        this.notifications = new Map(); // irctcId -> [notifications]
-        console.log('📱 InAppNotificationService initialized');
+        this.collectionName = 'in_app_notifications';
+        console.log('📱 InAppNotificationService initialized (MongoDB-backed)');
+    }
+
+    /**
+     * Get MongoDB collection
+     */
+    async getCollection() {
+        const racDb = await db.getDb();
+        return racDb.collection(this.collectionName);
     }
 
     /**
      * Create a new notification
      */
-    createNotification(irctcId, type, data) {
+    async createNotification(irctcId, type, data) {
         if (!irctcId) {
             console.error('❌ Cannot create notification: IRCTC ID is required');
             return null;
         }
+
+        const collection = await this.getCollection();
 
         const notification = {
             id: `NOTIF_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -26,16 +39,10 @@ class InAppNotificationService {
             type, // 'NO_SHOW_MARKED', 'UPGRADE_OFFER', 'NO_SHOW_REVERTED'
             data,
             read: false,
-            createdAt: new Date().toISOString()
+            createdAt: new Date()
         };
 
-        // Initialize array if doesn't exist
-        if (!this.notifications.has(irctcId)) {
-            this.notifications.set(irctcId, []);
-        }
-
-        // Add notification at the beginning (most recent first)
-        this.notifications.get(irctcId).unshift(notification);
+        await collection.insertOne(notification);
 
         console.log(`📬 Created ${type} notification for ${irctcId}`);
         return notification;
@@ -44,91 +51,82 @@ class InAppNotificationService {
     /**
      * Get all notifications for a user
      */
-    getNotifications(irctcId, limit = null) {
-        const userNotifications = this.notifications.get(irctcId) || [];
+    async getNotifications(irctcId, limit = null) {
+        const collection = await this.getCollection();
+
+        let query = collection.find({ irctcId }).sort({ createdAt: -1 });
 
         if (limit) {
-            return userNotifications.slice(0, limit);
+            query = query.limit(limit);
         }
 
-        return userNotifications;
+        return await query.toArray();
     }
 
     /**
      * Get unread notifications
      */
-    getUnreadNotifications(irctcId) {
-        const userNotifications = this.notifications.get(irctcId) || [];
-        return userNotifications.filter(n => !n.read);
+    async getUnreadNotifications(irctcId) {
+        const collection = await this.getCollection();
+        return await collection.find({ irctcId, read: false }).sort({ createdAt: -1 }).toArray();
     }
 
     /**
      * Get unread count
      */
-    getUnreadCount(irctcId) {
-        return this.getUnreadNotifications(irctcId).length;
+    async getUnreadCount(irctcId) {
+        const collection = await this.getCollection();
+        return await collection.countDocuments({ irctcId, read: false });
     }
 
     /**
      * Mark notification as read
      */
-    markAsRead(irctcId, notificationId) {
-        const userNotifications = this.notifications.get(irctcId);
+    async markAsRead(irctcId, notificationId) {
+        const collection = await this.getCollection();
 
-        if (!userNotifications) {
-            throw new Error('No notifications found for this user');
-        }
-
-        const notification = userNotifications.find(n => n.id === notificationId);
+        const notification = await collection.findOne({ irctcId, id: notificationId });
 
         if (!notification) {
             throw new Error('Notification not found');
         }
 
-        notification.read = true;
+        await collection.updateOne(
+            { id: notificationId },
+            { $set: { read: true, readAt: new Date() } }
+        );
+
         console.log(`✅ Marked notification ${notificationId} as read`);
-        return notification;
+        return { ...notification, read: true };
     }
 
     /**
      * Mark all notifications as read
      */
-    markAllAsRead(irctcId) {
-        const userNotifications = this.notifications.get(irctcId);
+    async markAllAsRead(irctcId) {
+        const collection = await this.getCollection();
 
-        if (!userNotifications) {
-            return 0;
-        }
+        const result = await collection.updateMany(
+            { irctcId, read: false },
+            { $set: { read: true, readAt: new Date() } }
+        );
 
-        let count = 0;
-        userNotifications.forEach(notification => {
-            if (!notification.read) {
-                notification.read = true;
-                count++;
-            }
-        });
-
-        console.log(`✅ Marked ${count} notifications as read for ${irctcId}`);
-        return count;
+        console.log(`✅ Marked ${result.modifiedCount} notifications as read for ${irctcId}`);
+        return result.modifiedCount;
     }
 
     /**
      * Delete notification
      */
-    deleteNotification(irctcId, notificationId) {
-        const userNotifications = this.notifications.get(irctcId);
+    async deleteNotification(irctcId, notificationId) {
+        const collection = await this.getCollection();
 
-        if (!userNotifications) {
-            throw new Error('No notifications found for this user');
-        }
+        const result = await collection.deleteOne({ irctcId, id: notificationId });
 
-        const index = userNotifications.findIndex(n => n.id === notificationId);
-
-        if (index === -1) {
+        if (result.deletedCount === 0) {
             throw new Error('Notification not found');
         }
 
-        userNotifications.splice(index, 1);
         console.log(`🗑️  Deleted notification ${notificationId}`);
         return true;
     }
@@ -136,8 +134,9 @@ class InAppNotificationService {
     /**
      * Clear all notifications for a user
      */
-    clearAllNotifications(irctcId) {
-        this.notifications.delete(irctcId);
+    async clearAllNotifications(irctcId) {
+        const collection = await this.getCollection();
+        await collection.deleteMany({ irctcId });
         console.log(`🗑️  Cleared all notifications for ${irctcId}`);
         return true;
     }
@@ -145,17 +144,25 @@ class InAppNotificationService {
     /**
      * Get notification statistics
      */
-    getStats(irctcId) {
-        const userNotifications = this.notifications.get(irctcId) || [];
+    async getStats(irctcId) {
+        const collection = await this.getCollection();
+
+        const [total, unread, noShowMarked, upgradeOffer, noShowReverted] = await Promise.all([
+            collection.countDocuments({ irctcId }),
+            collection.countDocuments({ irctcId, read: false }),
+            collection.countDocuments({ irctcId, type: 'NO_SHOW_MARKED' }),
+            collection.countDocuments({ irctcId, type: 'UPGRADE_OFFER' }),
+            collection.countDocuments({ irctcId, type: 'NO_SHOW_REVERTED' })
+        ]);
 
         return {
-            total: userNotifications.length,
-            unread: userNotifications.filter(n => !n.read).length,
-            read: userNotifications.filter(n => n.read).length,
+            total,
+            unread,
+            read: total - unread,
             byType: {
-                NO_SHOW_MARKED: userNotifications.filter(n => n.type === 'NO_SHOW_MARKED').length,
-                UPGRADE_OFFER: userNotifications.filter(n => n.type === 'UPGRADE_OFFER').length,
-                NO_SHOW_REVERTED: userNotifications.filter(n => n.type === 'NO_SHOW_REVERTED').length
+                NO_SHOW_MARKED: noShowMarked,
+                UPGRADE_OFFER: upgradeOffer,
+                NO_SHOW_REVERTED: noShowReverted
             }
         };
     }

@@ -120,17 +120,17 @@ export const tteAPI = {
     // Offline upgrades management (auth handled by interceptor)
     getOfflineUpgrades: async () => {
         const response = await api.get('/tte/offline-upgrades');
-        return response;
+        return response.data;
     },
 
     confirmOfflineUpgrade: async (upgradeId) => {
         const response = await api.post('/tte/offline-upgrades/confirm', { upgradeId });
-        return response;
+        return response.data;
     },
 
     rejectOfflineUpgrade: async (upgradeId) => {
         const response = await api.post('/tte/offline-upgrades/reject', { upgradeId });
-        return response;
+        return response.data;
     }
 };
 

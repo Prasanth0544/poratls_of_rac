@@ -8,7 +8,7 @@
 ## 🔴 CRITICAL PRIORITIES
 
 ### 1. Security
-- [ ] **Backend OTP Storage** - In-memory (use Redis)
+- [x] **Backend OTP Storage** - ~~In-memory~~ → MongoDB with TTL ✅ COMPLETED
 - [ ] **No Rate Limiting** - API vulnerable to abuse
 - [ ] **No CSRF Protection** - Forms need CSRF tokens
 - [ ] **JWT Refresh Strategy** - No refresh token implementation
@@ -16,7 +16,7 @@
 ### 2. Scalability  
 - [ ] **Single Server Architecture** - No horizontal scaling
 - [ ] **No Load Balancing** - Single point of failure
-- [ ] **In-Memory State** - Lost on server restart
+- [x] **In-Memory State** - ~~Lost on restart~~ → OTP, Upgrade Notifications, In-App Notifications now in MongoDB ✅ COMPLETED
 
 ### 3. Reliability
 - [ ] **No Health Monitoring** - Basic /health endpoint only
@@ -30,19 +30,18 @@
 
 ### Security Issues
 
-#### 1. OTP Storage - In-Memory Map
-**Current:** OTPService uses JavaScript Map  
-**Risk:** OTPs lost on server restart  
-**Impact:** Users mid-verification will fail  
-**Fix:** Migrate to Redis with TTL
+#### 1. OTP Storage - ✅ COMPLETED (MongoDB with TTL)
+**Status:** ✅ FIXED - OTPs now persist in MongoDB `rac.otp_store` collection
+**Solution:** TTL index auto-expires after 5 minutes  
+**Files Changed:** `OTPService.js`, `otpController.js`
 ```javascript
-// Current (Vulnerable)
-this.otpStore = new Map();
-
-// Recommended
-const redis = require('redis');
-const client = redis.createClient();
-await client.setEx(`otp:${key}`, 300, otp);
+// NEW: MongoDB-backed OTP storage
+await collection.updateOne(
+  { key },
+  { $set: { otp, createdAt: new Date() } },
+  { upsert: true }
+);
+// TTL index handles automatic cleanup
 ```
 
 #### 2. No Rate Limiting

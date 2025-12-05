@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../services/api';
+import { initializePushNotifications } from '../services/pushNotificationService';
 import './PhaseOnePage.css';
 
 /**
@@ -48,6 +49,13 @@ const PhaseOnePage = ({ onClose }) => {
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
+
+    // ✅ Initialize push notifications for Admin
+    initializePushNotifications((data) => {
+      console.log('🔄 Admin Portal: Received push notification, refreshing...', data);
+      fetchMatchingData();
+      fetchUpgradedPassengers();
+    });
 
     return () => {
       clearInterval(interval);

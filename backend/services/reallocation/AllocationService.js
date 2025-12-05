@@ -107,6 +107,50 @@ class AllocationService {
       berth,
     });
 
+    // ✅ TASK 1: Send push + email notification to upgraded passenger
+    try {
+      const passengersCollection = db.getPassengersCollection();
+      const dbPassenger = await passengersCollection.findOne({ PNR_Number: pnr });
+
+      if (dbPassenger) {
+        const irctcId = dbPassenger.IRCTC_ID;
+        const email = dbPassenger.Email;
+        const fullBerthNo = `${coach}-${berth}`;
+
+        // Send web push notification
+        if (irctcId) {
+          const WebPushService = require('../WebPushService');
+          await WebPushService.sendPushNotification(irctcId, {
+            title: '🎉 Upgrade Confirmed!',
+            body: `Your RAC ticket has been upgraded to ${fullBerthNo} (${berthObj.type})`,
+            icon: '/logo192.png',
+            badge: '/badge.png',
+            url: 'http://localhost:5175/#/dashboard',
+            data: {
+              type: 'RAC_UPGRADE_CONFIRMED',
+              pnr: pnr,
+              newBerth: fullBerthNo,
+              berthType: berthObj.type
+            }
+          });
+          console.log(`📲 Upgrade push sent to ${irctcId}`);
+        }
+
+        // Send email notification
+        if (email) {
+          const NotificationService = require('../NotificationService');
+          await NotificationService.sendUpgradeNotification(
+            { pnr, name: passenger.name, email },
+            'RAC',
+            { coachNo: coach, berthNo: berth, fullBerthNo, type: berthObj.type }
+          );
+          console.log(`📧 Upgrade email sent to ${email}`);
+        }
+      }
+    } catch (notifError) {
+      console.error('⚠️ Error sending upgrade notification:', notifError.message);
+    }
+
     return {
       success: true,
       pnr,

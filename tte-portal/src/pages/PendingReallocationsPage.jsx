@@ -15,7 +15,27 @@ const PendingReallocationsPage = () => {
 
         // Auto-refresh every 10 seconds
         const interval = setInterval(fetchPendingReallocations, 10000);
-        return () => clearInterval(interval);
+
+        // ✅ DUAL-APPROVAL: Listen for passenger self-approval via WebSocket
+        const ws = new WebSocket('ws://localhost:5000');
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                // Refresh when passenger approves their own upgrade
+                if (data.type === 'UPGRADE_APPROVED_BY_PASSENGER' ||
+                    data.type === 'RAC_REALLOCATION_APPROVED') {
+                    console.log('🔄 TTE: Refresh triggered by approval event', data);
+                    fetchPendingReallocations();
+                }
+            } catch (err) {
+                // Ignore parse errors
+            }
+        };
+
+        return () => {
+            clearInterval(interval);
+            ws.close();
+        };
     }, []);
 
     const fetchPendingReallocations = async () => {
@@ -146,7 +166,7 @@ const PendingReallocationsPage = () => {
                 </div>
             )}
 
-            {/* Reallocations List */}
+            {/* Reallocations Table */}
             {pendingReallocations.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">✨</div>
@@ -154,109 +174,111 @@ const PendingReallocationsPage = () => {
                     <p>All reallocations have been processed</p>
                 </div>
             ) : (
-                <div className="reallocations-grid">
-                    {pendingReallocations.map((realloc) => (
-                        <div key={realloc._id} className="reallocation-card">
-                            {/* Selection Checkbox */}
-                            <div className="card-checkbox">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedIds.includes(realloc._id)}
-                                    onChange={() => toggleSelection(realloc._id)}
-                                />
-                            </div>
-
-                            {/* Card Content */}
-                            <div className="card-header">
-                                <h3>{realloc.passengerName}</h3>
-                                <span className="station-badge">
-                                    📍 {realloc.stationName}
-                                </span>
-                            </div>
-
-                            <div className="card-body">
-                                <div className="detail-row">
-                                    <span className="label">PNR:</span>
-                                    <span className="value">{realloc.passengerPNR}</span>
-                                </div>
-                                <div className="detail-row">
-                                    <span className="label">Journey:</span>
-                                    <span className="value">
-                                        {realloc.passengerFrom} → {realloc.passengerTo}
-                                    </span>
-                                </div>
-                                <div className="detail-row">
-                                    <span className="label">Current:</span>
-                                    <span className="value  current">
-                                        {realloc.currentBerth} ({realloc.currentRAC})
-                                    </span>
-                                </div>
-                                <div className="detail-row highlight">
-                                    <span className="label">✨ Proposed:</span>
-                                    <span className="value proposed">
-                                        {realloc.proposedBerthFull} ({realloc.proposedBerthType})
-                                    </span>
-                                </div>
-                                <div className="detail-row">
-                                    <span className="label">Berth Vacant:</span>
-                                    <span className="value">
-                                        {realloc.berthVacantFrom} → {realloc.berthVacantTo}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Card Actions */}
-                            <div className="card-actions">
-                                {rejecting === realloc._id ? (
-                                    <div className="rejection-form">
+                <div className="table-container">
+                    <table className="reallocations-table">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.length === pendingReallocations.length}
+                                        onChange={toggleSelectAll}
+                                    />
+                                </th>
+                                <th>Passenger Name</th>
+                                <th>PNR</th>
+                                <th>Station</th>
+                                <th>Journey</th>
+                                <th>Current Status</th>
+                                <th>Proposed Berth</th>
+                                <th>Berth Vacant</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pendingReallocations.map((realloc) => (
+                                <tr key={realloc._id} className={selectedIds.includes(realloc._id) ? 'selected' : ''}>
+                                    <td>
                                         <input
-                                            type="text"
-                                            placeholder="Rejection reason..."
-                                            value={rejectionReason}
-                                            onChange={(e) => setRejectionReason(e.target.value)}
-                                            autoFocus
+                                            type="checkbox"
+                                            checked={selectedIds.includes(realloc._id)}
+                                            onChange={() => toggleSelection(realloc._id)}
                                         />
-                                        <button
-                                            className="btn-confirm-reject"
-                                            onClick={() => rejectReallocation(realloc._id)}
-                                            disabled={processing}
-                                        >
-                                            Confirm
-                                        </button>
-                                        <button
-                                            className="btn-cancel"
-                                            onClick={() => {
-                                                setRejecting(null);
-                                                setRejectionReason('');
-                                            }}
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <button
-                                            className="btn-approve-single"
-                                            onClick={() => {
-                                                setSelectedIds([realloc._id]);
-                                                approveBatch();
-                                            }}
-                                            disabled={processing}
-                                        >
-                                            ✅ Approve
-                                        </button>
-                                        <button
-                                            className="btn-reject"
-                                            onClick={() => setRejecting(realloc._id)}
-                                            disabled={processing}
-                                        >
-                                            ❌ Reject
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                                    </td>
+                                    <td className="passenger-name">{realloc.passengerName}</td>
+                                    <td className="pnr">{realloc.passengerPNR}</td>
+                                    <td>
+                                        <span className="station-badge">📍 {realloc.stationName}</span>
+                                    </td>
+                                    <td className="journey">
+                                        {realloc.passengerFrom} → {realloc.passengerTo}
+                                    </td>
+                                    <td className="current-status">
+                                        <span className="status-rac">
+                                            {realloc.currentBerth} ({realloc.currentRAC})
+                                        </span>
+                                    </td>
+                                    <td className="proposed-berth">
+                                        <span className="status-proposed">
+                                            ✨ {realloc.proposedBerthFull} ({realloc.proposedBerthType})
+                                        </span>
+                                    </td>
+                                    <td className="berth-vacant">
+                                        {realloc.berthVacantFrom} → {realloc.berthVacantTo}
+                                    </td>
+                                    <td className="actions">
+                                        {rejecting === realloc._id ? (
+                                            <div className="rejection-form-inline">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Reason..."
+                                                    value={rejectionReason}
+                                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    className="btn-confirm-small"
+                                                    onClick={() => rejectReallocation(realloc._id)}
+                                                    disabled={processing}
+                                                >
+                                                    ✓
+                                                </button>
+                                                <button
+                                                    className="btn-cancel-small"
+                                                    onClick={() => {
+                                                        setRejecting(null);
+                                                        setRejectionReason('');
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="action-buttons">
+                                                <button
+                                                    className="btn-approve-small"
+                                                    onClick={() => {
+                                                        setSelectedIds([realloc._id]);
+                                                        setTimeout(() => approveBatch(), 100);
+                                                    }}
+                                                    disabled={processing}
+                                                >
+                                                    ✅ Approve
+                                                </button>
+                                                <button
+                                                    className="btn-reject-small"
+                                                    onClick={() => setRejecting(realloc._id)}
+                                                    disabled={processing}
+                                                >
+                                                    ❌ Reject
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
         </div>

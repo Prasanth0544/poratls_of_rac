@@ -18,7 +18,7 @@ class PassengerService {
      */
     async acceptUpgrade(pnr, notificationId, trainState) {
         // Get notification
-        const allNotifications = UpgradeNotificationService.getAllNotifications(pnr);
+        const allNotifications = await UpgradeNotificationService.getAllNotifications(pnr);
         const notification = allNotifications.find(n => n.id === notificationId);
 
         if (!notification) {
@@ -36,7 +36,7 @@ class PassengerService {
         }
 
         // Accept the notification
-        const acceptedNotification = UpgradeNotificationService.acceptUpgrade(pnr, notificationId);
+        const acceptedNotification = await UpgradeNotificationService.acceptUpgrade(pnr, notificationId);
 
         // Find passenger in train state
         const passenger = trainState.findPassengerByPNR(pnr);
@@ -63,7 +63,7 @@ class PassengerService {
      */
     async denyUpgrade(pnr, notificationId) {
         // Get notification
-        const allNotifications = UpgradeNotificationService.getAllNotifications(pnr);
+        const allNotifications = await UpgradeNotificationService.getAllNotifications(pnr);
         const notification = allNotifications.find(n => n.id === notificationId);
 
         if (!notification) {
@@ -76,7 +76,7 @@ class PassengerService {
         }
 
         // Deny the notification
-        const deniedNotification = UpgradeNotificationService.denyUpgrade(pnr, notificationId);
+        const deniedNotification = await UpgradeNotificationService.denyUpgrade(pnr, notificationId);
 
         return {
             success: true,
@@ -90,8 +90,8 @@ class PassengerService {
      * @param {string} pnr - Passenger PNR
      * @returns {Array} Array of notifications
      */
-    getUpgradeNotifications(pnr) {
-        return UpgradeNotificationService.getAllNotifications(pnr);
+    async getUpgradeNotifications(pnr) {
+        return await UpgradeNotificationService.getAllNotifications(pnr);
     }
 
     /**
