@@ -53,7 +53,7 @@ RAC-Reallocation-System/
 
 | Component | Tech Stack | Port | Start Command | Purpose |
 |-----------|------------|------|---------------|--------|
-| **Backend** | Node.js, Express, MongoDB, WebSocket | 5000 | `npm start` | REST API & Real-time updates |
+| **Backend** | Node.js, Express, MongoDB, WebSocket | 5000 | `npm run dev` | REST API & Real-time updates |
 | **Admin Frontend** | **Vite, React 19**, Material-UI | 3000 | `npm run dev` | Admin dashboard & controls |
 | **Passenger Portal** | Vite, React 19, Material-UI | 5173 | `npm run dev` | Passenger PNR check & upgrades |
 | **TTE Portal** | Vite, React 19, Material-UI, Recharts | 5174 | `npm run dev` | TTE operations & management |
@@ -227,7 +227,7 @@ Open **4 separate terminals** and run:
 ```bash
 # Terminal 1: Backend (Port 5000)
 cd backend
-npm start
+npm run dev
 
 # Terminal 2: Admin Frontend (Port 3000)
 cd frontend
@@ -247,7 +247,7 @@ npm run dev
 **PowerShell (Windows) - Start All:**
 ```powershell
 # Run each in a new terminal window
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; npm start"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; npm run dev"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd passenger-portal; npm run dev"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd tte-portal; npm run dev"
@@ -712,7 +712,7 @@ npm run dev      # Development mode with auto-reload
 #### Terminal 2: Admin Frontend
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
 > Admin Portal runs on: **http://localhost:3000**
 
@@ -734,7 +734,7 @@ npm run dev
 ```powershell
 # PowerShell - Run each in a new terminal
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; npm run dev"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm start"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd passenger-portal; npm run dev"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd tte-portal; npm run dev"
 ```

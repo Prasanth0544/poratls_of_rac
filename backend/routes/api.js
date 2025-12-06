@@ -747,7 +747,11 @@ router.post('/tte/push-subscribe',
   async (req, res) => {
     try {
       const { subscription } = req.body;
-      const tteId = req.user.username || req.user.id;
+      const tteId = req.user.userId || req.user.employeeId || req.user.username || req.user.id;
+
+      if (!tteId) {
+        return res.status(400).json({ success: false, message: 'TTE ID not found in token' });
+      }
 
       await PushSubscriptionService.addTTESubscription(tteId, subscription);
 
@@ -765,7 +769,11 @@ router.post('/admin/push-subscribe',
   async (req, res) => {
     try {
       const { subscription } = req.body;
-      const adminId = req.user.username || req.user.id;
+      const adminId = req.user.userId || req.user.employeeId || req.user.username || req.user.id;
+
+      if (!adminId) {
+        return res.status(400).json({ success: false, message: 'Admin ID not found in token' });
+      }
 
       await PushSubscriptionService.addAdminSubscription(adminId, subscription);
 

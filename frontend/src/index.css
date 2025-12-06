@@ -46,3 +46,58 @@ code {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* =============================================
+   Global Page Header Styles
+   Ensures heading is centered across all pages
+   ============================================= */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  min-height: 50px;
+}
+
+.page-header .back-btn {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.page-header .back-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.page-header .back-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.page-header h1,
+.page-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  flex: 1;
+  padding: 0 50px;
+  /* Space for back button on left */
+}

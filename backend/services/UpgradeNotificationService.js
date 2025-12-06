@@ -29,9 +29,21 @@ class UpgradeNotificationService {
 
     /**
      * Create upgrade notification for RAC passenger
+     * Clears any old PENDING notifications for this station before creating new ones
      */
-    async createUpgradeNotification(racPassenger, vacantBerth, currentStation) {
+    async createUpgradeNotification(racPassenger, vacantBerth, currentStation, clearOldFirst = true) {
         const collection = await this.getCollection();
+
+        // Clear old pending notifications for this station (prevents duplicates)
+        if (clearOldFirst) {
+            const deleteResult = await collection.deleteMany({
+                stationCode: currentStation.code,
+                status: 'PENDING'
+            });
+            if (deleteResult.deletedCount > 0) {
+                console.log(`   🗑️ Cleared ${deleteResult.deletedCount} old pending notifications for station ${currentStation.code}`);
+            }
+        }
 
         const notification = {
             id: `UPGRADE_${Date.now()}_${racPassenger.pnr}`,
@@ -56,6 +68,22 @@ class UpgradeNotificationService {
         console.log(`   Offered: ${vacantBerth.fullBerthNo} (${vacantBerth.type})`);
 
         return notification;
+    }
+
+    /**
+     * Clear all pending notifications for a station
+     * Called when new batch is being created
+     */
+    async clearPendingNotificationsForStation(stationCode) {
+        const collection = await this.getCollection();
+        const result = await collection.deleteMany({
+            stationCode: stationCode,
+            status: 'PENDING'
+        });
+        if (result.deletedCount > 0) {
+            console.log(`🗑️ Cleared ${result.deletedCount} old pending notifications for station ${stationCode}`);
+        }
+        return result.deletedCount;
     }
 
     /**

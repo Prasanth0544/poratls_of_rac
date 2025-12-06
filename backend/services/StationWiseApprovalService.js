@@ -243,14 +243,43 @@ class StationWiseApprovalService {
 
     /**
      * Save pending reallocations to MongoDB
+     * STRATEGY: Delete all existing pending for this station, then insert fresh batch
+     * This ensures old/stale entries are cleared when frontend restarts
      */
     async _savePendingReallocations(pendingReallocations) {
         try {
-            const database = db.getPassengersCollection().s.db; // Get database from passengers collection
+            const database = db.getPassengersCollection().s.db;
             const collection = database.collection('station_reallocations');
-            const result = await collection.insertMany(pendingReallocations);
-            console.log(`   💾 Saved ${result.insertedCount} pending reallocations to MongoDB`);
-            return result;
+
+            if (pendingReallocations.length === 0) {
+                return { insertedCount: 0, deletedCount: 0 };
+            }
+
+            // Get the station index from the first entry (all should be same station)
+            const stationIdx = pendingReallocations[0].stationIdx;
+            const trainId = pendingReallocations[0].trainId;
+
+            // STEP 1: Delete all existing PENDING reallocations for this station
+            // This clears old/stale entries (e.g., from frontend crashes)
+            const deleteResult = await collection.deleteMany({
+                trainId: trainId,
+                stationIdx: stationIdx,
+                status: 'pending'
+            });
+
+            if (deleteResult.deletedCount > 0) {
+                console.log(`   🗑️ Cleared ${deleteResult.deletedCount} old pending entries for station ${stationIdx}`);
+            }
+
+            // STEP 2: Insert the fresh batch
+            const insertResult = await collection.insertMany(pendingReallocations);
+
+            console.log(`   💾 Saved ${insertResult.insertedCount} pending reallocations to MongoDB`);
+
+            return {
+                insertedCount: insertResult.insertedCount,
+                deletedCount: deleteResult.deletedCount
+            };
         } catch (error) {
             console.error('Error saving to MongoDB:', error.message);
             throw error;
