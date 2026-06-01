@@ -49,6 +49,8 @@ function SignUpPage(): React.ReactElement {
 
     const handleSignUp = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
+        if (loading) return;
+
         setError('');
         setSuccess('');
         setLoading(true);

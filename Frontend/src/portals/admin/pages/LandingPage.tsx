@@ -151,6 +151,8 @@ const LandingPage: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
 
   const handleAddTrain = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (addingTrain) return;
+
     setAddTrainError('');
     setAddingTrain(true);
 
@@ -184,6 +186,8 @@ const LandingPage: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
 
   const handleSignUpTTE = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (signingUpTTE) return;
+
     setTteError('');
     setSigningUpTTE(true);
 
@@ -196,10 +200,13 @@ const LandingPage: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
         ttePhone.trim() || undefined,
         tteEmail.trim() || undefined,
       );
-      if (result.success && result.data?.user) {
-        setCreatedTTE(result.data.user);
+      const createdUser = result.data?.user || (result as any).user;
+
+      if (result.success && createdUser) {
+        setCreatedTTE(createdUser);
         setTteError('');
-        successToast("TTE Created", `TTE ID: ${result.data.user.employeeId}`);
+        successToast("TTE Created", `TTE ID: ${createdUser.employeeId}`);
+        loadTrains();
       } else {
         const msg = result.error || "Failed to create TTE. Please try again.";
         setTteError(msg);            // show inline inside modal
