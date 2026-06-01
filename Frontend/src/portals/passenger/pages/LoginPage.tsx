@@ -26,7 +26,9 @@ function LoginPage({ onSwitchToSignUp }: LoginPageProps): React.ReactElement {
             const response = await passengerAPI.login(loginId, password, loginType === 0 ? 'irctcId' : 'email');
 
             if (response.success) {
-                // Tokens are now in httpOnly cookies — only store non-sensitive metadata
+                // Store tokens for Authorization header (cross-origin cookies unreliable)
+                if (response.token) localStorage.setItem('accessToken', response.token);
+                if (response.refreshToken) localStorage.setItem('refreshToken', response.refreshToken);
                 localStorage.setItem('isAuthenticated', 'true');
                 localStorage.setItem('user', JSON.stringify(response.user));
                 localStorage.setItem('tickets', JSON.stringify(response.tickets));

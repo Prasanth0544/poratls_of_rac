@@ -128,11 +128,14 @@ class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
-      // Return success with user info only (no tokens in body)
-      // Tokens are securely delivered via httpOnly cookies
+      // Return tokens in body AND as cookies (cross-origin cookies
+      // between Vercel frontend and Render backend are blocked by
+      // modern browsers, so the frontend uses Authorization header)
       res.json({
         success: true,
         message: "Login successful",
+        token,
+        refreshToken,
         expiresIn: 900, // 15 minutes in seconds
         user: {
           employeeId: user.employeeId,
@@ -518,11 +521,14 @@ class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
-      // Return success with user info only (no tokens in body)
-      // Tokens are securely delivered via httpOnly cookies
+      // Return tokens in body AND as cookies (cross-origin cookies
+      // between Vercel frontend and Render backend are blocked by
+      // modern browsers, so the frontend uses Authorization header)
       res.json({
         success: true,
         message: "Login successful",
+        token,
+        refreshToken,
         expiresIn: 900, // 15 minutes in seconds
         user: {
           irctcId: user.IRCTC_ID,
@@ -837,6 +843,7 @@ class AuthController {
 
       res.json({
         success: true,
+        token: newAccessToken,
         expiresIn: 900, // 15 minutes in seconds
       });
     } catch (error) {

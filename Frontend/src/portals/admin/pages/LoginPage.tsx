@@ -26,7 +26,9 @@ function LoginPage({ onSwitchToSignUp }: LoginPageProps): React.ReactElement {
             });
 
             if (response.data.success) {
-                // Tokens are now in httpOnly cookies — only store non-sensitive metadata
+                // Store tokens for Authorization header (cross-origin cookies unreliable)
+                if (response.data.token) localStorage.setItem('accessToken', response.data.token);
+                if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
                 localStorage.setItem('isAuthenticated', 'true');
                 localStorage.setItem('user', JSON.stringify(response.data.user));
                 window.location.reload();

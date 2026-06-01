@@ -101,7 +101,10 @@ function LoginPage({ onLoginSuccess }: LoginPageProps): React.ReactElement {
             const data = response.data;
 
             if (data.success) {
-                // Tokens are now in httpOnly cookies — only store non-sensitive metadata
+                // Store tokens for Authorization header (cross-origin cookies
+                // between Vercel and Render are blocked by modern browsers)
+                if (data.token) localStorage.setItem('accessToken', data.token);
+                if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
                 localStorage.setItem('isAuthenticated', 'true');
                 localStorage.setItem('activePortal', role);
 

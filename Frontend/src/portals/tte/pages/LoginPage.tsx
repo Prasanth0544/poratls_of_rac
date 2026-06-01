@@ -23,7 +23,9 @@ function LoginPage({ }: LoginPageProps): React.ReactElement {
             const response = await tteAPI.login(employeeId, password);
 
             if (response.success && response.user) {
-                // Tokens are now in httpOnly cookies — only store non-sensitive metadata
+                // Store tokens for Authorization header (cross-origin cookies unreliable)
+                if (response.token) localStorage.setItem('accessToken', response.token);
+                if (response.refreshToken) localStorage.setItem('refreshToken', response.refreshToken);
                 const apiUser = response.user;
                 const userForStorage = {
                     username: apiUser.name || apiUser.employeeId || '',

@@ -112,8 +112,12 @@ ensureCsrfToken();
 
 api.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
-        // Auth tokens are sent automatically via httpOnly cookies (withCredentials: true)
-        // No need to manually attach Authorization header
+        // Attach JWT from localStorage as Authorization header
+        // (cross-origin httpOnly cookies between Vercel and Render are blocked by browsers)
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
 
         // Add CSRF token for state-changing requests
         if (config.method && !['get', 'head', 'options'].includes(config.method.toLowerCase())) {
@@ -151,6 +155,46 @@ api.interceptors.response.use(
     async (error) => {
         const status = error.response?.status;
         const data = error.response?.data;
+
+        // Handle 401 Unauthorized - try to refresh token
+        if (status === 401) {
+            const requestUrl: string = error.config?.url || '';
+            const isAuthEndpoint = requestUrl.includes('/auth/');
+            if (isAuthEndpoint) {
+                return Promise.reject(error.response?.data || error);
+            }
+
+            const isExpiredToken =
+                data?.message?.toLowerCase().includes('expired') ||
+                data?.message?.toLowerCase().includes('jwt');
+
+            if (isExpiredToken && !error.config._refreshRetry) {
+                error.config._refreshRetry = true;
+                try {
+                    const storedRefreshToken = localStorage.getItem('refreshToken');
+                    const refreshRes = await axios.post(
+                        `${API_BASE_URL}/auth/refresh`,
+                        { refreshToken: storedRefreshToken },
+                        { withCredentials: true },
+                    );
+                    if (refreshRes.data?.token) {
+                        localStorage.setItem('accessToken', refreshRes.data.token);
+                    }
+                    error.config.headers['Authorization'] = `Bearer ${localStorage.getItem('accessToken')}`;
+                    return api.request(error.config);
+                } catch (refreshError) {
+                    console.error('[Admin API] Token refresh failed:', refreshError);
+                }
+            }
+
+            // Refresh failed — clear auth and soft-redirect
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('user');
+            localStorage.removeItem('activePortal');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
 
         // Handle 403 Forbidden (CSRF errors)
         if (status === 403) {

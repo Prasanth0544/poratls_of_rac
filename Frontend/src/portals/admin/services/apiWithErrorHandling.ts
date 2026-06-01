@@ -103,8 +103,12 @@ ensureCsrfToken();
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Auth tokens are sent automatically via httpOnly cookies (withCredentials: true)
-    // No need to manually attach Authorization header
+    // Attach JWT from localStorage as Authorization header
+    // (cross-origin httpOnly cookies between Vercel and Render are blocked by browsers)
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
 
     // Add CSRF token for state-changing requests
     if (
@@ -196,16 +200,20 @@ api.interceptors.response.use(
 
       if (isExpiredToken) {
         try {
-          if (import.meta.env.DEV) console.log("[API] Token expired, attempting cookie-based refresh...");
-          // Refresh token is in httpOnly cookie — browser sends it automatically
-          await axios.post(
+          if (import.meta.env.DEV) console.log("[API] Token expired, attempting refresh...");
+          const storedRefreshToken = localStorage.getItem('refreshToken');
+          const refreshRes = await axios.post(
             `${API_BASE_URL}/auth/refresh`,
-            {},
+            { refreshToken: storedRefreshToken },
             { withCredentials: true },
           );
-          if (import.meta.env.DEV) console.log("[API] Token refreshed successfully via cookie");
+          if (refreshRes.data?.token) {
+            localStorage.setItem('accessToken', refreshRes.data.token);
+          }
+          if (import.meta.env.DEV) console.log("[API] Token refreshed successfully");
 
-          // Retry original request — new access token is now in the cookie
+          // Retry original request with new token
+          error.config.headers['Authorization'] = `Bearer ${localStorage.getItem('accessToken')}`;
           return api.request(error.config);
         } catch (refreshError) {
           if (import.meta.env.DEV) console.error("[API] Token refresh failed:", refreshError);
