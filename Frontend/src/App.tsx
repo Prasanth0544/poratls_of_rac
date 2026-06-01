@@ -16,6 +16,20 @@ const QRTicketViewPage = lazy(() => import('./portals/passenger/pages/QRTicketVi
 
 type PortalRole = 'admin' | 'tte' | 'passenger';
 
+function resetLogoutUiState(): void {
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    document.documentElement.style.overflow = '';
+    document.body.classList.remove('modal-open');
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+    window.setTimeout(() => {
+        document.querySelectorAll('.MuiModal-root, .MuiPopover-root, .MuiBackdrop-root')
+            .forEach((element) => element.remove());
+    }, 0);
+}
+
 function LoadingFallback(): React.ReactElement {
     return (
         <div style={{
@@ -53,6 +67,7 @@ function App(): React.ReactElement {
     const handleLogout = (): void => {
         // Fire event FIRST so any open WebSocket/interval listeners can close cleanly
         window.dispatchEvent(new Event('app:logout'));
+        resetLogoutUiState();
 
         // Nuclear clear — wipes ALL portal keys: configuredTrainTabs, trainPage_*,
         // idempotency_* (passenger), token, refreshToken, user, activePortal, tickets, trainNo …
@@ -75,7 +90,6 @@ function App(): React.ReactElement {
         const onUnauthorized = () => handleLogout();
         window.addEventListener('auth:unauthorized', onUnauthorized);
         return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

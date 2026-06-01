@@ -27,8 +27,9 @@ interface TrainConfig {
   journeyDate?: string;
 }
 
-const TrainDashboard: React.FC<{ initialPage?: string }> = ({
+const TrainDashboard: React.FC<{ initialPage?: string; onLogout?: () => void }> = ({
   initialPage,
+  onLogout,
 }) => {
   const { trainNo } = useParams<{ trainNo?: string }>();
   const navigate = useNavigate();
@@ -319,7 +320,7 @@ const TrainDashboard: React.FC<{ initialPage?: string }> = ({
 
   // ── Render: configured ───────────────────────────────────────────────────
   if (configured) {
-    return <TrainApp initialPage={initialPage} />;
+    return <TrainApp initialPage={initialPage} onLogout={onLogout} />;
   }
 
   // ── Render: loading ──────────────────────────────────────────────────────

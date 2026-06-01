@@ -358,19 +358,19 @@ export default function RoleSelector() {
 
             {/* SIGN IN MODAL */}
             <div
-                className={`modal-overlay ${modalOpen ? 'open' : ''}`}
-                id="modalOverlay"
+                className={`role-modal-overlay ${modalOpen ? 'open' : ''}`}
+                id="roleModalOverlay"
                 onClick={(e) => {
-                    if ((e.target as HTMLElement).id === 'modalOverlay') setModalOpen(false);
+                    if ((e.target as HTMLElement).id === 'roleModalOverlay') setModalOpen(false);
                 }}
             >
-                <div className="modal" id="modal">
-                    <button className="modal-close" onClick={() => setModalOpen(false)}>✕</button>
-                    <div className="modal-header">
+                <div className="role-modal" id="roleModal">
+                    <button className="role-modal-close" onClick={() => setModalOpen(false)}>✕</button>
+                    <div className="role-modal-header">
                         <h3>Welcome to RailEase</h3>
                         <p>Choose your portal to continue</p>
                     </div>
-                    <div className="modal-portals">
+                    <div className="role-modal-portals">
                         <button className="portal-option po-admin" onClick={() => handlePortalClick('admin')}>
                             <div className="po-icon">🖥️</div>
                             <div className="po-text">

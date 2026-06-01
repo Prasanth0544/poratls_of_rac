@@ -471,7 +471,7 @@ nav.scrolled {
 }
 
 .portal-list li::before {
-    content: '\u2713';
+    content: '✓';
     font-weight: 800;
     font-size: .72rem;
     color: var(--c)
@@ -947,11 +947,11 @@ footer {
 }
 
 /* ── MODAL ── */
-.modal-overlay {
+.role-modal-overlay {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .45);
-    z-index: 500;
+    z-index: 5000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -960,12 +960,12 @@ footer {
     transition: opacity .3s;
 }
 
-.modal-overlay.open {
+.role-modal-overlay.open {
     opacity: 1;
     pointer-events: all
 }
 
-.modal {
+.role-modal {
     background: #fff;
     border-radius: 20px;
     width: 100%;
@@ -978,11 +978,11 @@ footer {
     position: relative;
 }
 
-.modal-overlay.open .modal {
+.role-modal-overlay.open .role-modal {
     transform: translateY(0) scale(1)
 }
 
-.modal-close {
+.role-modal-close {
     position: absolute;
     top: .9rem;
     right: .9rem;
@@ -1000,27 +1000,27 @@ footer {
     transition: background .2s;
 }
 
-.modal-close:hover {
+.role-modal-close:hover {
     background: var(--border)
 }
 
-.modal-header {
+.role-modal-header {
     padding: 2rem 2rem 1.5rem;
     border-bottom: 1px solid var(--border)
 }
 
-.modal-header h3 {
+.role-modal-header h3 {
     font-size: 1.25rem;
     font-weight: 800;
     margin-bottom: .3rem
 }
 
-.modal-header p {
+.role-modal-header p {
     font-size: .87rem;
     color: var(--muted)
 }
 
-.modal-portals {
+.role-modal-portals {
     padding: 1.5rem 2rem 2rem;
     display: flex;
     flex-direction: column;

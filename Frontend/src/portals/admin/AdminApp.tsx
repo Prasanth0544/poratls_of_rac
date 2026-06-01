@@ -22,9 +22,9 @@ interface AdminAppProps {
  * changes (e.g. switching tabs). Without this, React reuses the same
  * component instance and the old train data persists.
  */
-function TrainDashboardWithKey({ initialPage }: { initialPage?: string }) {
+function TrainDashboardWithKey({ initialPage, onLogout }: { initialPage?: string; onLogout?: () => void }) {
     const { trainNo } = useParams();
-    return <TrainDashboard key={trainNo} initialPage={initialPage} />;
+    return <TrainDashboard key={trainNo} initialPage={initialPage} onLogout={onLogout} />;
 }
 
 function AdminApp({ onLogout }: AdminAppProps): React.ReactElement {
@@ -34,13 +34,13 @@ function AdminApp({ onLogout }: AdminAppProps): React.ReactElement {
             <Route path="/" element={<LandingPage onLogout={onLogout} />} />
 
             {/* Train Dashboard - Auto-configured from URL param */}
-            <Route path="/train/:trainNo" element={<TrainDashboardWithKey />} />
+            <Route path="/train/:trainNo" element={<TrainDashboardWithKey onLogout={onLogout} />} />
 
             {/* Evaluation Dashboard */}
             <Route path="/evaluation" element={<EvaluationPage />} />
 
             {/* Manual Config Page */}
-            <Route path="/config" element={<TrainDashboardWithKey initialPage="config" />} />
+            <Route path="/config" element={<TrainDashboardWithKey initialPage="config" onLogout={onLogout} />} />
 
             {/* Redirect unknown routes to admin landing */}
             <Route path="*" element={<Navigate to="/admin" replace />} />

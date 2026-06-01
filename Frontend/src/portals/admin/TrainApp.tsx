@@ -93,9 +93,10 @@ type PageType =
 
 interface AppProps {
   initialPage?: string;
+  onLogout?: () => void;
 }
 
-function App({ initialPage }: AppProps): React.ReactElement {
+function App({ initialPage, onLogout }: AppProps): React.ReactElement {
   const navigate = useNavigate();
   const { trainNo: urlTrainNo } = useParams<{ trainNo?: string }>();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -720,6 +721,9 @@ function App({ initialPage }: AppProps): React.ReactElement {
     setJourneyStarted(false);
     setAutoInitAttempted(false);
     setCurrentPage('config');
+    if (onLogout) {
+      onLogout();
+    }
   };
 
   // Auto-start timer when page is refreshed and journey was already in progress

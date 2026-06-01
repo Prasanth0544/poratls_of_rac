@@ -16,6 +16,11 @@ class WebSocketService {
     private listeners: { [event: string]: EventCallback[] } = {};
     private connected: boolean = false;
     private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    private shouldReconnect: boolean = true;
+
+    constructor() {
+        window.addEventListener('app:logout', () => this.disconnect());
+    }
 
     /**
      * Connect to WebSocket server
@@ -26,6 +31,7 @@ class WebSocketService {
             return;
         }
 
+        this.shouldReconnect = true;
         console.log(`[PLUG] Connecting to WebSocket: ${url}`);
 
         this.ws = new WebSocket(url);
@@ -60,7 +66,12 @@ class WebSocketService {
             this.connected = false;
             this.emit('disconnected');
 
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            if (!this.shouldReconnect) {
+                this.ws = null;
+                return;
+            }
+
+            if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
                 console.log(`🔄 Reconnecting... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
                 this.reconnectTimeoutId = setTimeout(() => this.connect(url), this.reconnectDelay);
@@ -161,6 +172,13 @@ class WebSocketService {
      * Disconnect from WebSocket and cleanup
      */
     disconnect(): void {
+        this.shouldReconnect = false;
+
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+            this.reconnectTimeoutId = null;
+        }
+
         if (this.ws) {
             try {
                 if (this.ws.readyState === WebSocket.OPEN) {
@@ -174,10 +192,6 @@ class WebSocketService {
                 this.connected = false;
                 this.listeners = {};
 
-                if (this.reconnectTimeoutId) {
-                    clearTimeout(this.reconnectTimeoutId);
-                    this.reconnectTimeoutId = null;
-                }
             }
         }
     }

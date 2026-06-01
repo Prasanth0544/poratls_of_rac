@@ -2,7 +2,6 @@
 // TTE portal — stripped of login page rendering (handled by root App)
 // Keeps: token verify/refresh, push notifications, tab-based UI, and logout
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Tabs, Tab } from '@mui/material';
 import TrainIcon from '@mui/icons-material/Train';
@@ -53,7 +52,6 @@ const theme = createTheme({
 });
 
 function TteApp({ onLogout }: TteAppProps): React.ReactElement {
-    const navigate = useNavigate();
     const [user, setUser] = useState<User | null>(null);
     const [currentTab, setCurrentTab] = useState<number>(0);
     const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 960);
@@ -191,7 +189,6 @@ function TteApp({ onLogout }: TteAppProps): React.ReactElement {
     const handleLogout = (): void => {
         setMenuOpen(false);
         onLogout();
-        navigate('/tte', { replace: true });
     };
 
     return (

@@ -2,7 +2,7 @@
 // Passenger portal — stripped of login/signup and BrowserRouter (handled by root App)
 // Keeps: push notifications, upgrade count polling, Navigation tabs, all page routes
 import React, { useState, useEffect, MouseEvent } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme, Theme } from '@mui/material/styles';
 import { CssBaseline, AppBar, Toolbar, Typography, Container, Box, Tabs, Tab, IconButton, Menu, MenuItem, Divider, Badge } from '@mui/material';
 import TrainIcon from '@mui/icons-material/Train';
@@ -177,7 +177,6 @@ interface PassengerAppProps {
 }
 
 function PassengerApp({ onLogout }: PassengerAppProps): React.ReactElement {
-    const navigate = useNavigate();
     const [user, setUser] = useState<User | null>(null);
     const [upgradeCount, setUpgradeCount] = useState<number>(0);
 
@@ -235,7 +234,6 @@ function PassengerApp({ onLogout }: PassengerAppProps): React.ReactElement {
 
     const handleLogout = (): void => {
         onLogout();
-        navigate('/passenger', { replace: true });
     };
 
     return (
