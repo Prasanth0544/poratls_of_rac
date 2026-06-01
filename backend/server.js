@@ -32,7 +32,8 @@ app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || [
     'http://localhost:3000',  // Admin Portal (React)
     'http://localhost:5174',  // TTE Portal (Vite)
-    'http://localhost:5175',   // Passenger Portal (Vite)
+    'http://localhost:5175',  // Passenger Portal (Vite)
+    'https://portals-of-rac.vercel.app', // ✅ Main deployed frontend
     'https://passengerportal.vercel.app',
     'https://rac-tte.vercel.app',
     'https://rac-admin-page.vercel.app'
